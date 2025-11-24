@@ -1,0 +1,71 @@
+{
+  "id": "a0c17aa5-a582-47e4-a82b-5d16915c93dd",
+  "user_id": "f5f53644-0574-49b1-8180-9eb630b5bbbe",
+  "email": "team.travliaq@gmail.com",
+  "travel_group": "duo",
+  "number_of_travelers": 2,
+  "has_destination": "no",
+  "destination": null,
+  "climate_preference": "[\"Hot & sunny\",\"Mild & sweet\"]",
+  "travel_affinities": [
+    "Paradise beaches",
+    "Nature & hiking",
+    "Local gastronomy",
+    "Islands & archipelagos",
+    "Amusement parks"
+  ],
+  "travel_ambiance": "Relaxation",
+  "dates_type": "flexible",
+  "departure_date": null,
+  "return_date": null,
+  "flexibility": "±7d",
+  "duration": "5 nights",
+  "exact_nights": null,
+  "budget_per_person": "<€300",
+  "budget_type": null,
+  "budget_amount": null,
+  "budget_currency": null,
+  "styles": null,
+  "rhythm": "relaxed",
+  "flight_preference": "Max 1 stop",
+  "luggage": {
+    "0": "Cabin + Hold",
+    "1": "Personal item only"
+  },
+  "mobility": [
+    "Don't mind"
+  ],
+  "accommodation_type": [
+    "Hotel",
+    "Apartment"
+  ],
+  "comfort": null,
+  "neighborhood": "Quiet",
+  "amenities": [
+    "Gym",
+    "Pool",
+    "Reliable Wi-Fi",
+    "Spa/jacuzzi"
+  ],
+  "constraints": [
+    "Halal",
+    "No alcohol",
+    "No pork",
+    "Respect local traditions"
+  ],
+  "additional_info": "Je voudrais bien une activité de couple et un massage pour moi",
+  "created_at": "2025-10-19T22:07:41.371381+02:00",
+  "updated_at": "2025-10-19T22:07:41.371381+02:00",
+  "departure_location": "Bruxelles, Belgique",
+  "has_approximate_departure_date": "yes",
+  "approximate_departure_date": "2025-11-28",
+  "children": null,
+  "security": [
+    "No particular constraints"
+  ],
+  "biorhythm": null,
+  "language": "fr",
+  "schedule_prefs": null,
+  "help_with": null,
+  "hotel_preferences": null
+}

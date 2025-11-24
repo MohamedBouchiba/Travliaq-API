@@ -1,0 +1,252 @@
+{
+  "schema": {
+    "$id": "https://travliaq.com/schemas/questionnaire-response.json",
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
+  "meta": {
+    "response_id": "7c819e8a-c3d5-4f62-b814-eeac5818d580",
+    "user_id": "3383829f-95a1-495e-af1f-f0ff4b6e2ea1",
+    "email": "naji.amine.0@gmail.com",
+    "created_at": "2025-10-23T17:09:08.996529+02:00",
+    "updated_at": "2025-10-23T17:09:08.996529+02:00",
+    "source": "db/supabase"
+  },
+  "answers": {
+    "id": {
+      "value": "7c819e8a-c3d5-4f62-b814-eeac5818d580",
+      "status": "answered"
+    },
+    "user_id": {
+      "value": "3383829f-95a1-495e-af1f-f0ff4b6e2ea1",
+      "status": "answered"
+    },
+    "email": {
+      "value": "naji.amine.0@gmail.com",
+      "status": "answered"
+    },
+    "travel_group": {
+      "value": "solo",
+      "status": "answered"
+    },
+    "number_of_travelers": {
+      "value": 1,
+      "status": "not_applicable"
+    },
+    "has_destination": {
+      "value": "yes",
+      "status": "answered"
+    },
+    "destination": {
+      "value": "Mascate, Oman 🇴🇲",
+      "status": "answered"
+    },
+    "departure_location": {
+      "value": "Bruxelles, Belgique 🇧🇪",
+      "status": "answered"
+    },
+    "climate_preference": {
+      "value": null,
+      "status": "unknown"
+    },
+    "travel_affinities": {
+      "value": null,
+      "status": "unknown"
+    },
+    "travel_ambiance": {
+      "value": null,
+      "status": "unknown"
+    },
+    "dates_type": {
+      "value": "flexible",
+      "status": "unknown"
+    },
+    "departure_date": {
+      "value": null,
+      "status": "unknown"
+    },
+    "return_date": {
+      "value": null,
+      "status": "unknown"
+    },
+    "flexibility": {
+      "value": "±2-3 jours",
+      "status": "answered"
+    },
+    "has_approximate_departure_date": {
+      "value": "no",
+      "status": "answered"
+    },
+    "approximate_departure_date": {
+      "value": null,
+      "status": "unknown"
+    },
+    "duration": {
+      "value": "8 à 10 nuits",
+      "status": "answered"
+    },
+    "exact_nights": {
+      "value": null,
+      "status": "unknown"
+    },
+    "budget": {
+      "value": null,
+      "status": "unknown"
+    },
+    "budget_type": {
+      "value": null,
+      "status": "unknown"
+    },
+    "budget_amount": {
+      "value": null,
+      "status": "not_applicable"
+    },
+    "budget_currency": {
+      "value": null,
+      "status": "not_applicable"
+    },
+    "styles": {
+      "value": [
+        "Nature",
+        "Culture & musées",
+        "Plage",
+        "Montagne & rando",
+        "Vie locale & marchés"
+      ],
+      "status": "answered"
+    },
+    "rhythm": {
+      "value": "intense",
+      "status": "answered"
+    },
+    "flight_preference": {
+      "value": "Peu importe (prix avant tout)",
+      "status": "answered"
+    },
+    "luggage": {
+      "value": {
+        "0": "Cabine + Soute"
+      },
+      "status": "answered"
+    },
+    "mobility": {
+      "value": [
+        "Aucun problème de mobilité"
+      ],
+      "status": "answered"
+    },
+    "accommodation_type": {
+      "value": [
+        "Hôtel",
+        "Appartement"
+      ],
+      "status": "answered"
+    },
+    "comfort": {
+      "value": null,
+      "status": "unknown"
+    },
+    "neighborhood": {
+      "value": "Proche nature/plage",
+      "status": "answered"
+    },
+    "amenities": {
+      "value": [
+        "Parking"
+      ],
+      "status": "answered"
+    },
+    "constraints": {
+      "value": [
+        "Halal"
+      ],
+      "status": "answered"
+    },
+    "additional_info": {
+      "value": "experience avec la population locale",
+      "status": "answered"
+    },
+    "created_at": {
+      "value": "2025-10-23T17:09:08.996529+02:00",
+      "status": "answered"
+    },
+    "updated_at": {
+      "value": "2025-10-23T17:09:08.996529+02:00",
+      "status": "answered"
+    }
+  },
+  "normalized": {
+    "id": "7c819e8a-c3d5-4f62-b814-eeac5818d580",
+    "user_id": "3383829f-95a1-495e-af1f-f0ff4b6e2ea1",
+    "email": "naji.amine.0@gmail.com",
+    "travel_group": "solo",
+    "number_of_travelers": 1,
+    "has_destination": "yes",
+    "destination": "Mascate, Oman 🇴🇲",
+    "departure_location": "Bruxelles, Belgique 🇧🇪",
+    "climate_preference": null,
+    "travel_affinities": null,
+    "travel_ambiance": null,
+    "dates_type": "flexible",
+    "departure_date": null,
+    "return_date": null,
+    "flexibility": "±2-3 jours",
+    "has_approximate_departure_date": "no",
+    "approximate_departure_date": null,
+    "duration": "8 à 10 nuits",
+    "exact_nights": null,
+    "budget": null,
+    "budget_type": null,
+    "budget_amount": null,
+    "budget_currency": null,
+    "styles": [
+      "Nature",
+      "Culture & musées",
+      "Plage",
+      "Montagne & rando",
+      "Vie locale & marchés"
+    ],
+    "rhythm": "intense",
+    "flight_preference": "Peu importe (prix avant tout)",
+    "luggage": {
+      "0": "Cabine + Soute"
+    },
+    "mobility": [
+      "Aucun problème de mobilité"
+    ],
+    "accommodation_type": [
+      "Hôtel",
+      "Appartement"
+    ],
+    "comfort": null,
+    "neighborhood": "Proche nature/plage",
+    "amenities": [
+      "Parking"
+    ],
+    "constraints": [
+      "Halal"
+    ],
+    "additional_info": "experience avec la population locale",
+    "created_at": "2025-10-23T17:09:08.996529+02:00",
+    "updated_at": "2025-10-23T17:09:08.996529+02:00"
+  },
+  "validation": {
+    "valid": false,
+    "errors": [
+      "$.travel_group: 'solo' is not one of ['Solo', 'En duo', 'Groupe (3-5)', 'En famille', None]",
+      "$.has_destination: 'yes' is not one of ['Oui', 'Non', 'Yes', 'No', None]",
+      "$.dates_type: 'flexible' is not one of ['Dates fixes', 'Dates flexibles', None]",
+      "$.has_approximate_departure_date: 'no' is not one of ['Oui', 'Non', 'Yes', 'No', None]",
+      "$.styles[0]: 'Nature' is not one of ['Nature & randonnées', 'Culture & musées', 'Gastronomie', 'Plage & farniente', 'Montagne & altitude', 'Spots photo', 'Marchés locaux', 'Sport & plein air', 'Bien-être & spa', 'Vie nocturne']",
+      "$.styles[2]: 'Plage' is not one of ['Nature & randonnées', 'Culture & musées', 'Gastronomie', 'Plage & farniente', 'Montagne & altitude', 'Spots photo', 'Marchés locaux', 'Sport & plein air', 'Bien-être & spa', 'Vie nocturne']",
+      "$.styles[3]: 'Montagne & rando' is not one of ['Nature & randonnées', 'Culture & musées', 'Gastronomie', 'Plage & farniente', 'Montagne & altitude', 'Spots photo', 'Marchés locaux', 'Sport & plein air', 'Bien-être & spa', 'Vie nocturne']",
+      "$.styles[4]: 'Vie locale & marchés' is not one of ['Nature & randonnées', 'Culture & musées', 'Gastronomie', 'Plage & farniente', 'Montagne & altitude', 'Spots photo', 'Marchés locaux', 'Sport & plein air', 'Bien-être & spa', 'Vie nocturne']",
+      "$.rhythm: 'intense' is not one of [\"Cool (2-3h d'activités/jour)\", \"Équilibré (4-6h d'activités/jour)\", \"Intense (7h+ d'activités/jour)\", None]",
+      "$.luggage.0: 'Cabine + Soute' is not one of ['Cabine uniquement', '1 bagage en soute', '2 bagages en soute']",
+      "$.accommodation_type[1]: 'Appartement' is not one of ['Hôtel', 'Appartement/Airbnb', \"Maison d'hôtes\", 'Auberge de jeunesse', 'Resort all-inclusive', 'Camping/Glamping']",
+      "$.constraints[0]: 'Halal' is not one of ['Nourriture halal', 'Nourriture casher', 'Végétarien', 'Végétalien (vegan)', 'Sans gluten', 'Sans porc', 'Sans alcool', 'Lieux de prière à proximité', 'Traditions bouddhistes', 'Accessibilité PMR', 'Zones sûres (LGBTQ+, femmes...)', 'Éviter la voiture', 'Respecter traditions locales', 'Allergies alimentaires', 'Peu importe']",
+      "$: {'id': '7c819e8a-c3d5-4f62-b814-eeac5818d580', 'user_id': '3383829f-95a1-495e-af1f-f0ff4b6e2ea1', 'email': 'naji.amine.0@gmail.com', 'travel_group': 'solo', 'number_of_travelers': 1, 'has_destination': 'yes', 'destination': 'Mascate, Oman 🇴🇲', 'departure_location': 'Bruxelles, Belgique 🇧🇪', 'climate_preference': None, 'travel_affinities': None, 'travel_ambiance': None, 'dates_type': 'flexible', 'departure_date': None, 'return_date': None, 'flexibility': '±2-3 jours', 'has_approximate_departure_date': 'no', 'approximate_departure_date': None, 'duration': '8 à 10 nuits', 'exact_nights': None, 'budget': None, 'budget_type': None, 'budget_amount': None, 'budget_currency': None, 'styles': ['Nature', 'Culture & musées', 'Plage', 'Montagne & rando', 'Vie locale & marchés'], 'rhythm': 'intense', 'flight_preference': 'Peu importe (prix avant tout)', 'luggage': {'0': 'Cabine + Soute'}, 'mobility': ['Aucun problème de mobilité'], 'accommodation_type': ['Hôtel', 'Appartement'], 'comfort': None, 'neighborhood': 'Proche nature/plage', 'amenities': ['Parking'], 'constraints': ['Halal'], 'additional_info': 'experience avec la population locale', 'created_at': '2025-10-23T17:09:08.996529+02:00', 'updated_at': '2025-10-23T17:09:08.996529+02:00'} is not valid under any of the given schemas",
+      "$: {'id': '7c819e8a-c3d5-4f62-b814-eeac5818d580', 'user_id': '3383829f-95a1-495e-af1f-f0ff4b6e2ea1', 'email': 'naji.amine.0@gmail.com', 'travel_group': 'solo', 'number_of_travelers': 1, 'has_destination': 'yes', 'destination': 'Mascate, Oman 🇴🇲', 'departure_location': 'Bruxelles, Belgique 🇧🇪', 'climate_preference': None, 'travel_affinities': None, 'travel_ambiance': None, 'dates_type': 'flexible', 'departure_date': None, 'return_date': None, 'flexibility': '±2-3 jours', 'has_approximate_departure_date': 'no', 'approximate_departure_date': None, 'duration': '8 à 10 nuits', 'exact_nights': None, 'budget': None, 'budget_type': None, 'budget_amount': None, 'budget_currency': None, 'styles': ['Nature', 'Culture & musées', 'Plage', 'Montagne & rando', 'Vie locale & marchés'], 'rhythm': 'intense', 'flight_preference': 'Peu importe (prix avant tout)', 'luggage': {'0': 'Cabine + Soute'}, 'mobility': ['Aucun problème de mobilité'], 'accommodation_type': ['Hôtel', 'Appartement'], 'comfort': None, 'neighborhood': 'Proche nature/plage', 'amenities': ['Parking'], 'constraints': ['Halal'], 'additional_info': 'experience avec la population locale', 'created_at': '2025-10-23T17:09:08.996529+02:00', 'updated_at': '2025-10-23T17:09:08.996529+02:00'} is not valid under any of the given schemas",
+      "$: {'id': '7c819e8a-c3d5-4f62-b814-eeac5818d580', 'user_id': '3383829f-95a1-495e-af1f-f0ff4b6e2ea1', 'email': 'naji.amine.0@gmail.com', 'travel_group': 'solo', 'number_of_travelers': 1, 'has_destination': 'yes', 'destination': 'Mascate, Oman 🇴🇲', 'departure_location': 'Bruxelles, Belgique 🇧🇪', 'climate_preference': None, 'travel_affinities': None, 'travel_ambiance': None, 'dates_type': 'flexible', 'departure_date': None, 'return_date': None, 'flexibility': '±2-3 jours', 'has_approximate_departure_date': 'no', 'approximate_departure_date': None, 'duration': '8 à 10 nuits', 'exact_nights': None, 'budget': None, 'budget_type': None, 'budget_amount': None, 'budget_currency': None, 'styles': ['Nature', 'Culture & musées', 'Plage', 'Montagne & rando', 'Vie locale & marchés'], 'rhythm': 'intense', 'flight_preference': 'Peu importe (prix avant tout)', 'luggage': {'0': 'Cabine + Soute'}, 'mobility': ['Aucun problème de mobilité'], 'accommodation_type': ['Hôtel', 'Appartement'], 'comfort': None, 'neighborhood': 'Proche nature/plage', 'amenities': ['Parking'], 'constraints': ['Halal'], 'additional_info': 'experience avec la population locale', 'created_at': '2025-10-23T17:09:08.996529+02:00', 'updated_at': '2025-10-23T17:09:08.996529+02:00'} is not valid under any of the given schemas"
+    ]
+  }
+}

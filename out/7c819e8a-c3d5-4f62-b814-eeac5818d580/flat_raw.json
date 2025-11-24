@@ -1,0 +1,65 @@
+{
+  "id": "7c819e8a-c3d5-4f62-b814-eeac5818d580",
+  "user_id": "3383829f-95a1-495e-af1f-f0ff4b6e2ea1",
+  "email": "naji.amine.0@gmail.com",
+  "travel_group": "solo",
+  "number_of_travelers": 1,
+  "has_destination": "yes",
+  "destination": "Mascate, Oman 🇴🇲",
+  "climate_preference": null,
+  "travel_affinities": null,
+  "travel_ambiance": null,
+  "dates_type": "flexible",
+  "departure_date": null,
+  "return_date": null,
+  "flexibility": "±3j",
+  "duration": "8-10 nuits",
+  "exact_nights": null,
+  "budget_per_person": null,
+  "budget_type": null,
+  "budget_amount": null,
+  "budget_currency": null,
+  "styles": [
+    "Nature",
+    "Culture & musées",
+    "Plage",
+    "Montagne & rando",
+    "Vie locale & marchés"
+  ],
+  "rhythm": "intense",
+  "flight_preference": "Peu importe",
+  "luggage": {
+    "0": "Cabine + Soute"
+  },
+  "mobility": [
+    "Location voiture",
+    "Transport atypique"
+  ],
+  "accommodation_type": [
+    "Hôtel",
+    "Appartement"
+  ],
+  "comfort": null,
+  "neighborhood": "Proche nature/plage",
+  "amenities": [
+    "Parking"
+  ],
+  "constraints": [
+    "Halal"
+  ],
+  "additional_info": "experience avec la population locale",
+  "created_at": "2025-10-23T17:09:08.996529+02:00",
+  "updated_at": "2025-10-23T17:09:08.996529+02:00",
+  "departure_location": "Bruxelles, Belgique 🇧🇪",
+  "has_approximate_departure_date": "no",
+  "approximate_departure_date": null,
+  "children": null,
+  "security": [
+    "Peur du noir/espaces clos"
+  ],
+  "biorhythm": null,
+  "language": "fr",
+  "schedule_prefs": null,
+  "help_with": null,
+  "hotel_preferences": null
+}

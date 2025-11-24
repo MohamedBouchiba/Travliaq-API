@@ -1,0 +1,69 @@
+{
+  "id": "dda92d14-75ba-43e2-be01-3852e1d9d79d",
+  "user_id": "f5f53644-0574-49b1-8180-9eb630b5bbbe",
+  "email": "mohamed.bouchiba1993@gmail.com",
+  "travel_group": "duo",
+  "number_of_travelers": 2,
+  "has_destination": "yes",
+  "destination": "Séville",
+  "climate_preference": null,
+  "travel_affinities": null,
+  "travel_ambiance": null,
+  "dates_type": "flexible",
+  "departure_date": null,
+  "return_date": null,
+  "flexibility": "±7j",
+  "duration": "5 nuits",
+  "exact_nights": null,
+  "budget": "<300€",
+  "budget_type": null,
+  "budget_amount": null,
+  "budget_currency": null,
+  "styles": [
+    "Bien-être & spa",
+    "Food",
+    "Photo spots",
+    "Plage"
+  ],
+  "rhythm": "relaxed",
+  "flight_preference": "Max 1 escale",
+  "luggage": {
+    "0": "Cabine + Soute",
+    "1": "Objet personnel uniquement"
+  },
+  "mobility": [
+    "Peu importe"
+  ],
+  "accommodation_type": [
+    "Hôtel",
+    "Appartement"
+  ],
+  "comfort": null,
+  "neighborhood": "Calme",
+  "amenities": [
+    "Wi-Fi fiable",
+    "Salle de sport",
+    "Réception 24/7"
+  ],
+  "constraints": [
+    "Sans alcool",
+    "Sans porc",
+    "Halal",
+    "Respect traditions locales"
+  ],
+  "additional_info": null,
+  "created_at": "2025-10-19T22:10:38.896142+02:00",
+  "updated_at": "2025-10-19T22:10:38.896142+02:00",
+  "departure_location": "Bruxelles, Belgique 🇧🇪",
+  "has_approximate_departure_date": "yes",
+  "approximate_departure_date": "2025-11-28",
+  "children": null,
+  "security": [
+    "Aucune contrainte particulière"
+  ],
+  "biorhythm": null,
+  "language": "fr",
+  "schedule_prefs": null,
+  "help_with": null,
+  "hotel_preferences": null
+}

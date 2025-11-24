@@ -1,0 +1,615 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://travliaq.com/schemas/questionnaire-response.json",
+  "title": "Travliaq Travel Questionnaire Response",
+  "description": "Schéma complet pour les réponses au questionnaire de voyage Travliaq. Ce questionnaire peut comporter jusqu'à 24-28 étapes selon le parcours de l'utilisateur.",
+  "type": "object",
+  "required": ["email"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identifiant unique de la réponse (généré automatiquement)"
+    },
+    "user_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "ID de l'utilisateur Supabase Auth (null si non authentifié au moment de la soumission)"
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "maxLength": 255,
+      "description": "Email de l'utilisateur (obligatoire)",
+      "examples": ["jean.dupont@example.com"]
+    },
+    "travel_group": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "Qui voyage ? (Étape 1)",
+      "enum": [
+        "Solo",
+        "En duo",
+        "Groupe (3-5)",
+        "En famille",
+        null
+      ],
+      "examples": ["En famille", "Solo"]
+    },
+    "number_of_travelers": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "maximum": 50,
+      "description": "Nombre exact de voyageurs (Étape 1b - conditionnel si Famille ou Groupe 3-5)",
+      "examples": [4, 2]
+    },
+    "has_destination": {
+      "type": ["string", "null"],
+      "maxLength": 50,
+      "description": "Destination en tête ? (Étape 2)",
+      "enum": ["Oui", "Non", "Yes", "No", null],
+      "examples": ["Oui", "Non"]
+    },
+    "destination": {
+      "type": ["string", "null"],
+      "maxLength": 200,
+      "description": "Destination choisie (Étape 2c - si has_destination = Oui)",
+      "examples": [
+        "Paris, France 🇫🇷",
+        "Tokyo, Japon 🇯🇵",
+        "New York, États-Unis 🇺🇸"
+      ]
+    },
+    "departure_location": {
+      "type": ["string", "null"],
+      "maxLength": 200,
+      "description": "Lieu de départ (Étape 2c - si has_destination = Oui)",
+      "examples": [
+        "Lyon, France 🇫🇷",
+        "Londres, Royaume-Uni 🇬🇧"
+      ]
+    },
+    "climate_preference": {
+      "type": ["array", "null"],
+      "description": "Préférences climatiques (Étape 2d - si has_destination = Non, choix multiples)",
+      "items": {
+        "type": "string",
+        "maxLength": 200,
+        "enum": [
+          "Chaud et ensoleillé",
+          "Doux et tempéré",
+          "Froid et neige",
+          "Tropical et humide",
+          "Montagne et altitude",
+          "Peu importe"
+        ]
+      },
+      "maxItems": 6,
+      "uniqueItems": true,
+      "examples": [
+        ["Chaud et ensoleillé", "Tropical et humide"],
+        ["Peu importe"]
+      ]
+    },
+    "travel_affinities": {
+      "type": ["array", "null"],
+      "description": "Affinités de voyage (Étape 2e - si has_destination = Non, max 5)",
+      "items": {
+        "type": "string",
+        "maxLength": 200,
+        "enum": [
+          "Plages paradisiaques",
+          "Villes historiques",
+          "Nature & randonnées",
+          "Ski & sports d'hiver",
+          "Safari & animaux",
+          "Gastronomie locale",
+          "Shopping & mode",
+          "Festivals & événements",
+          "Architecture moderne",
+          "Temples & spiritualité",
+          "Parcs d'attractions",
+          "Plongée & snorkeling",
+          "Road trip & liberté",
+          "Vignobles & œnologie",
+          "Déserts & paysages lunaires",
+          "Îles & archipels"
+        ]
+      },
+      "maxItems": 5,
+      "uniqueItems": true,
+      "examples": [
+        ["Plages paradisiaques", "Gastronomie locale", "Nature & randonnées"]
+      ]
+    },
+    "travel_ambiance": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "Ambiance recherchée (Étape 2f - si has_destination = Non)",
+      "enum": [
+        "Détente totale",
+        "Aventure & découverte",
+        "Culture & patrimoine",
+        "Fête & vie nocturne",
+        "Nature & ressourcement",
+        null
+      ],
+      "examples": ["Aventure & découverte", "Détente totale"]
+    },
+    "dates_type": {
+      "type": ["string", "null"],
+      "maxLength": 50,
+      "description": "Type de dates (Étape 3)",
+      "enum": ["Dates fixes", "Dates flexibles", null],
+      "examples": ["Dates flexibles"]
+    },
+    "departure_date": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Date de départ (Étape 3b - si dates_type = Dates fixes)",
+      "examples": ["2025-07-15"]
+    },
+    "return_date": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Date de retour (Étape 3b - si dates_type = Dates fixes)",
+      "examples": ["2025-07-22"]
+    },
+    "flexibility": {
+      "type": ["string", "null"],
+      "maxLength": 50,
+      "description": "Flexibilité des dates (Étape 3c - si dates_type = Dates flexibles)",
+      "enum": [
+        "±1 jour",
+        "±2-3 jours",
+        "±1 semaine",
+        "Totalement flexible",
+        null
+      ],
+      "examples": ["±2-3 jours", "Totalement flexible"]
+    },
+    "has_approximate_departure_date": {
+      "type": ["string", "null"],
+      "maxLength": 50,
+      "description": "Date de départ approximative ? (Étape 3d - si dates_type = Dates flexibles)",
+      "enum": ["Oui", "Non", "Yes", "No", null],
+      "examples": ["Oui"]
+    },
+    "approximate_departure_date": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Date approximative (Étape 3e - si has_approximate_departure_date = Oui)",
+      "examples": ["2025-08-01"]
+    },
+    "duration": {
+      "type": ["string", "null"],
+      "maxLength": 50,
+      "description": "Durée du séjour (Étape 4 - si dates_type = Dates flexibles)",
+      "enum": [
+        "2 nuits",
+        "3 nuits",
+        "4 nuits",
+        "5 nuits",
+        "6 nuits",
+        "7 nuits",
+        "8 à 10 nuits",
+        "11 à 14 nuits",
+        "+14 nuits",
+        null
+      ],
+      "examples": ["7 nuits", "11 à 14 nuits"]
+    },
+    "exact_nights": {
+      "type": ["integer", "null"],
+      "minimum": 15,
+      "maximum": 365,
+      "description": "Nombre exact de nuits (Étape 4b - si duration = +14 nuits)",
+      "examples": [21, 30]
+    },
+    "budget": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "Budget par personne (Étape 5 - hors vols)",
+      "enum": [
+        "Je ne sais pas",
+        "Montant précis",
+        "Moins de 300€",
+        "300-600€",
+        "600-900€",
+        "900-1200€",
+        "1200-1800€",
+        "Plus de 1800€",
+        null
+      ],
+      "examples": ["600-900€", "Plus de 1800€"]
+    },
+    "budget_type": {
+      "type": ["string", "null"],
+      "maxLength": 50,
+      "description": "Type de budget (Étape 5 - si budget = Montant précis)",
+      "enum": ["Montant précis", null],
+      "examples": ["Montant précis"]
+    },
+    "budget_amount": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 10000000,
+      "description": "Montant exact du budget (Étape 5b - si budget_type = Montant précis)",
+      "examples": [2500, 1200.50]
+    },
+    "budget_currency": {
+      "type": ["string", "null"],
+      "maxLength": 50,
+      "description": "Devise du budget (Étape 5b - si budget_type = Montant précis)",
+      "enum": ["EUR", "USD", "GBP", null],
+      "examples": ["EUR", "USD"]
+    },
+    "styles": {
+      "type": ["array", "null"],
+      "description": "Styles de voyage (Étape 6 - max 5, si has_destination = Oui ET activités sélectionnées)",
+      "items": {
+        "type": "string",
+        "maxLength": 200,
+        "enum": [
+          "Nature & randonnées",
+          "Culture & musées",
+          "Gastronomie",
+          "Plage & farniente",
+          "Montagne & altitude",
+          "Spots photo",
+          "Marchés locaux",
+          "Sport & plein air",
+          "Bien-être & spa",
+          "Vie nocturne"
+        ]
+      },
+      "maxItems": 5,
+      "uniqueItems": true,
+      "examples": [
+        ["Nature & randonnées", "Gastronomie", "Plage & farniente"]
+      ]
+    },
+    "rhythm": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "Rythme du voyage (Étape 7 - si activités sélectionnées)",
+      "enum": [
+        "Cool (2-3h d'activités/jour)",
+        "Équilibré (4-6h d'activités/jour)",
+        "Intense (7h+ d'activités/jour)",
+        null
+      ],
+      "examples": ["Équilibré (4-6h d'activités/jour)"]
+    },
+    "flight_preference": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "Préférence de vols (Étape 8 - si vols sélectionnés)",
+      "enum": [
+        "Uniquement vol direct",
+        "Max 1 escale",
+        "Peu importe (prix avant tout)",
+        null
+      ],
+      "examples": ["Max 1 escale"]
+    },
+    "luggage": {
+      "type": ["object", "null"],
+      "description": "Bagages par voyageur (Étape 9 - si vols sélectionnés). Clé = index voyageur, Valeur = type de bagage",
+      "patternProperties": {
+        "^[0-9]+$": {
+          "type": "string",
+          "enum": [
+            "Cabine uniquement",
+            "1 bagage en soute",
+            "2 bagages en soute"
+          ]
+        }
+      },
+      "examples": [
+        {
+          "0": "Cabine uniquement",
+          "1": "1 bagage en soute"
+        }
+      ]
+    },
+    "mobility": {
+      "type": ["array", "null"],
+      "description": "Mobilité et besoins (Étape 10 - choix multiples)",
+      "items": {
+        "type": "string",
+        "maxLength": 200,
+        "enum": [
+          "Aucun problème de mobilité",
+          "Mobilité réduite (fauteuil roulant)",
+          "Mobilité limitée (canne, déambulateur)",
+          "Besoin d'ascenseurs",
+          "Éviter les escaliers",
+          "Voyageur avec bébé/enfant en bas âge"
+        ]
+      },
+      "maxItems": 6,
+      "uniqueItems": true,
+      "examples": [
+        ["Aucun problème de mobilité"],
+        ["Besoin d'ascenseurs", "Éviter les escaliers"]
+      ]
+    },
+    "accommodation_type": {
+      "type": ["array", "null"],
+      "description": "Types d'hébergement (Étape 11 - si hébergement sélectionné, choix multiples)",
+      "items": {
+        "type": "string",
+        "maxLength": 100,
+        "enum": [
+          "Hôtel",
+          "Appartement/Airbnb",
+          "Maison d'hôtes",
+          "Auberge de jeunesse",
+          "Resort all-inclusive",
+          "Camping/Glamping"
+        ]
+      },
+      "maxItems": 6,
+      "uniqueItems": true,
+      "examples": [
+        ["Hôtel", "Appartement/Airbnb"]
+      ]
+    },
+    "comfort": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "Niveau de confort (Étape 12 - si hébergement sélectionné)",
+      "enum": [
+        "Note ≥7,5/10",
+        "Note ≥8,0/10",
+        "Note ≥8,5/10",
+        "Peu importe",
+        null
+      ],
+      "examples": ["Note ≥8,0/10"]
+    },
+    "neighborhood": {
+      "type": ["string", "null"],
+      "maxLength": 200,
+      "description": "Type de quartier (Étape 13 - si hébergement sélectionné)",
+      "enum": [
+        "Calme et reposant",
+        "Centre-ville animé",
+        "Proche nature/plage",
+        "Atypique et charmant",
+        null
+      ],
+      "examples": ["Centre-ville animé", "Proche nature/plage"]
+    },
+    "amenities": {
+      "type": ["array", "null"],
+      "description": "Équipements souhaités (Étape 14 - si hébergement sélectionné, choix multiples)",
+      "items": {
+        "type": "string",
+        "maxLength": 200,
+        "enum": [
+          "Wi-Fi fiable",
+          "Climatisation",
+          "Cuisine équipée",
+          "Lave-linge",
+          "Parking",
+          "Ascenseur",
+          "Réception 24h/24",
+          "Proche lieu de culte",
+          "Lit bébé",
+          "Chambre familiale",
+          "Piscine",
+          "Salle de sport",
+          "Spa",
+          "Jardin/Terrasse"
+        ]
+      },
+      "maxItems": 14,
+      "uniqueItems": true,
+      "examples": [
+        ["Wi-Fi fiable", "Climatisation", "Piscine"]
+      ]
+    },
+    "constraints": {
+      "type": ["array", "null"],
+      "description": "Contraintes et préférences alimentaires/religieuses (Étape 15 - choix multiples)",
+      "items": {
+        "type": "string",
+        "maxLength": 200,
+        "enum": [
+          "Nourriture halal",
+          "Nourriture casher",
+          "Végétarien",
+          "Végétalien (vegan)",
+          "Sans gluten",
+          "Sans porc",
+          "Sans alcool",
+          "Lieux de prière à proximité",
+          "Traditions bouddhistes",
+          "Accessibilité PMR",
+          "Zones sûres (LGBTQ+, femmes...)",
+          "Éviter la voiture",
+          "Respecter traditions locales",
+          "Allergies alimentaires",
+          "Peu importe"
+        ]
+      },
+      "maxItems": 15,
+      "uniqueItems": true,
+      "examples": [
+        ["Nourriture halal", "Sans alcool"],
+        ["Végétarien", "Sans gluten"],
+        ["Peu importe"]
+      ]
+    },
+    "additional_info": {
+      "type": ["string", "null"],
+      "maxLength": 2000,
+      "description": "Informations supplémentaires (Étape 16 - zone de texte libre, optionnelle)"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Date et heure de création de la réponse"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Date et heure de dernière modification"
+    }
+  },
+  "dependencies": {
+    "number_of_travelers": {
+      "description": "Le nombre de voyageurs n'est demandé que si travel_group est 'En famille' ou 'Groupe (3-5)'",
+      "oneOf": [
+        {
+          "properties": {
+            "travel_group": {
+              "enum": ["En famille", "Groupe (3-5)"]
+            }
+          },
+          "required": ["number_of_travelers"]
+        },
+        {
+          "properties": {
+            "number_of_travelers": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
+    "destination": {
+      "description": "La destination n'est demandée que si has_destination = 'Oui'",
+      "oneOf": [
+        {
+          "properties": {
+            "has_destination": {
+              "enum": ["Oui", "Yes"]
+            }
+          },
+          "required": ["destination", "departure_location"]
+        },
+        {
+          "properties": {
+            "destination": {
+              "type": "null"
+            },
+            "departure_location": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
+    "climate_preference": {
+      "description": "Les préférences climatiques ne sont demandées que si has_destination = 'Non'",
+      "oneOf": [
+        {
+          "properties": {
+            "has_destination": {
+              "enum": ["Non", "No"]
+            }
+          },
+          "required": ["climate_preference"]
+        },
+        {
+          "properties": {
+            "climate_preference": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
+    "departure_date": {
+      "description": "Les dates précises ne sont demandées que si dates_type = 'Dates fixes'",
+      "oneOf": [
+        {
+          "properties": {
+            "dates_type": {
+              "const": "Dates fixes"
+            }
+          },
+          "required": ["departure_date", "return_date"]
+        },
+        {
+          "properties": {
+            "departure_date": {
+              "type": "null"
+            },
+            "return_date": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
+    "duration": {
+      "description": "La durée n'est demandée que si dates_type = 'Dates flexibles'",
+      "oneOf": [
+        {
+          "properties": {
+            "dates_type": {
+              "const": "Dates flexibles"
+            }
+          },
+          "required": ["duration"]
+        },
+        {
+          "properties": {
+            "duration": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
+    "exact_nights": {
+      "description": "Le nombre exact de nuits n'est demandé que si duration = '+14 nuits'",
+      "oneOf": [
+        {
+          "properties": {
+            "duration": {
+              "const": "+14 nuits"
+            }
+          },
+          "required": ["exact_nights"]
+        },
+        {
+          "properties": {
+            "exact_nights": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    },
+    "budget_amount": {
+      "description": "Le montant et la devise ne sont demandés que si budget_type = 'Montant précis'",
+      "oneOf": [
+        {
+          "properties": {
+            "budget_type": {
+              "const": "Montant précis"
+            }
+          },
+          "required": ["budget_amount", "budget_currency"]
+        },
+        {
+          "properties": {
+            "budget_amount": {
+              "type": "null"
+            },
+            "budget_currency": {
+              "type": "null"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "examples": [],
+  "additionalProperties": false
+}
