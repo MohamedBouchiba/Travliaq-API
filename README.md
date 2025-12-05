@@ -1,56 +1,64 @@
-# Travliaq-API
+# POI Details API
 
-API de normalisation et d'enrichissement des données de voyage.
+Microservice FastAPI pour récupérer et enrichir les informations d'un Point of Interest (POI).
 
 ## Fonctionnalités
+- Endpoint unique `POST /poi-details` pour retourner un POI normalisé.
+- Persistance MongoDB avec clé canonique `poi_key` et index sur `poi_key` / `place_id`.
+- Lecture puis enrichissement via Google Places (Essentials), OpenTripMap (free), Wikidata.
+- Règles de complétude et TTL (par défaut 365 jours) pour éviter les appels externes inutiles.
 
-- Récupération des données depuis Supabase PostgreSQL
-- Normalisation et validation contre le schéma JSON officiel (draft-07)
-- Génération de fichiers enrichis (`out/<id>/enrich.json`)
-
-## Installation Locale
-
-1. Créer un environnement virtuel :
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # Windows: .venv\Scripts\activate
-   ```
-
-2. Installer les dépendances :
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Configurer l'environnement :
-   Copier `.env.example` vers `.env` et configurer la connexion PostgreSQL.
-
-4. Lancer l'API :
-   ```bash
-   uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-   ```
-
-## Déploiement (Docker / Railway)
-
-### Docker
-
-Construire l'image :
+## Démarrage local
 ```bash
-docker build -t travliaq-api .
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Lancer le conteneur :
-```bash
-docker run -p 8000:8000 --env-file .env travliaq-api
+## Variables d'environnement
+Ajoutez un fichier `.env` (voir `.env.example`) avec :
+
+- `GOOGLE_MAPS_API_KEY`
+- `OPENTRIPMAP_API_KEY`
+- `MONGODB_URI`
+- `MONGODB_DB`
+- `MONGODB_COLLECTION_POI` (optionnel, défaut `poi_details`)
+
+## Utilisation
+Requête :
+```http
+POST /poi-details
+Content-Type: application/json
+{
+  "poi_name": "Senso-ji Temple",
+  "city": "Tokyo",
+  "detail_types": ["hours", "pricing", "contact", "facts"]
+}
 ```
 
-### Variables d'Environnement
+Réponse (exemple abrégé) :
+```json
+{
+  "name": "Senso-ji Temple",
+  "city": "Tokyo",
+  "country": "Japan",
+  "location": {"lat": 35.7148, "lng": 139.7967},
+  "hours": {"weekly": {...}, "raw": {...}},
+  "pricing": {"admission_type": "unknown"},
+  "contact": {"phone": "+81 ...", "website": "https://..."},
+  "facts": {"year_built": 645, "unesco_site": false},
+  "sources": {"google_places": {...}},
+  "last_updated": "2025-12-01T10:00:00Z",
+  "poi_key": "senso-ji-temple__tokyo",
+  "place_id": "..."
+}
+```
 
-| Variable | Description | Exemple |
-|----------|-------------|---------|
-| `PG_CONN` | Chaîne de connexion PostgreSQL | `postgresql://user:pass@host:port/db` |
+## Docker
+```
+docker build -t poi-details-api .
+docker run -p 8000:8000 --env-file .env poi-details-api
+```
 
-### Documentation API
-
-Une fois lancé, la documentation interactive est disponible sur :
-- Swagger UI : `http://localhost:8000/docs`
-- ReDoc : `http://localhost:8000/redoc`
+La santé du conteneur est vérifiée via `GET /health`.
