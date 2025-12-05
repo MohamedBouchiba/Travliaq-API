@@ -22,7 +22,14 @@ class MongoManager:
     async def init_indexes(self) -> None:
         collection = self.collection()
         await collection.create_index([("poi_key", ASCENDING)], unique=True)
-        await collection.create_index([("place_id", ASCENDING)], sparse=True)
+        
+        # Drop old unique index if exists, then create non-unique one
+        try:
+            await collection.drop_index("place_id_1")
+        except Exception:
+            pass  # Index doesn't exist
+        
+        await collection.create_index([("place_id", ASCENDING)], name="place_id_1", sparse=True)
 
     async def close(self) -> None:
         if self._client:
