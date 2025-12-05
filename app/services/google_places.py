@@ -71,10 +71,10 @@ class GooglePlacesClient:
                 day = period.get("open", {}).get("day")
                 open_time = period.get("open", {}).get("time")
                 close_time = period.get("close", {}).get("time") if period.get("close") else None
-                if day is not None:
-                    weekly.setdefault(str(day), []).append(
-                        "-".join(filter(None, [open_time, close_time])) if open_time else None
-                    )
+                if day is not None and open_time:
+                    # Format: "HHMM-HHMM" or just "HHMM" if no close time
+                    time_range = "-".join(filter(None, [open_time, close_time])) if close_time else open_time
+                    weekly.setdefault(str(day), []).append(time_range)
         return {
             "name": place.get("displayName", {}).get("text"),
             "formatted_address": place.get("formattedAddress"),
