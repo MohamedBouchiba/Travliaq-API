@@ -12,6 +12,7 @@ from app.models.poi import (
     PricingInfo,
 )
 from app.services.google_places import GooglePlacesClient
+from app.services.nominatim import NominatimClient
 from app.services.opentripmap import OpenTripMapClient
 from app.services.poi_repository import POIRepository
 from app.services.wikidata import WikidataClient
@@ -23,6 +24,7 @@ class EnrichmentService:
         self,
         repo: POIRepository,
         google: GooglePlacesClient,
+        nominatim: NominatimClient,
         otm: OpenTripMapClient,
         wikidata: WikidataClient,
         ttl_days: int,
@@ -30,6 +32,7 @@ class EnrichmentService:
     ):
         self.repo = repo
         self.google = google
+        self.nominatim = nominatim
         self.otm = otm
         self.wikidata = wikidata
         self.ttl_days = ttl_days
@@ -61,10 +64,18 @@ class EnrichmentService:
 
         google_norm = GooglePlacesClient.normalize_basic(google_details or google_place or {}) if (google_details or google_place) else {}
 
+        # 🆓 FREE GPS FALLBACK: Use Nominatim (OpenStreetMap) if Google didn't return coordinates
+        location = google_norm.get("location")
+        nominatim_norm = None
+        if not location or not location.get("lat"):
+            nominatim_norm = await self.nominatim.geocode(payload.poi_name, payload.city)
+            if nominatim_norm and nominatim_norm.get("location"):
+                location = nominatim_norm["location"]
+                google_norm["location"] = location  # Inject into google_norm for downstream use
+
         otm_norm = None
-        if google_norm.get("location"):
-            loc = google_norm["location"]
-            otm_raw = await self.otm.fetch(lat=loc["lat"], lon=loc["lng"])
+        if location and location.get("lat") and location.get("lng"):
+            otm_raw = await self.otm.fetch(lat=location["lat"], lon=location["lng"])
             if otm_raw:
                 otm_norm = self.otm.normalize(otm_raw)
 

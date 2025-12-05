@@ -8,6 +8,7 @@ from app.core.config import get_settings
 from app.db.mongo import MongoManager
 from app.services.enrichment import EnrichmentService
 from app.services.google_places import GooglePlacesClient
+from app.services.nominatim import NominatimClient
 from app.services.opentripmap import OpenTripMapClient
 from app.services.poi_repository import POIRepository
 from app.services.wikidata import WikidataClient
@@ -24,12 +25,14 @@ async def startup_event() -> None:
 
     repository = POIRepository(app.state.mongo_manager.collection(), ttl_days=settings.ttl_days)
     google_client = GooglePlacesClient(settings.google_maps_api_key, app.state.http_client, settings.google_places_daily_cap)
+    nominatim_client = NominatimClient(settings.wikidata_user_agent, app.state.http_client)
     otm_client = OpenTripMapClient(settings.opentripmap_api_key, app.state.http_client, settings.opentripmap_daily_cap)
     wikidata_client = WikidataClient(settings.wikidata_user_agent, app.state.http_client)
 
     app.state.enrichment_service = EnrichmentService(
         repo=repository,
         google=google_client,
+        nominatim=nominatim_client,
         otm=otm_client,
         wikidata=wikidata_client,
         ttl_days=settings.ttl_days,

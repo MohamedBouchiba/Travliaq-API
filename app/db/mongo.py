@@ -22,7 +22,7 @@ class MongoManager:
     async def init_indexes(self) -> None:
         collection = self.collection()
         await collection.create_index([("poi_key", ASCENDING)], unique=True)
-        await collection.create_index([("place_id", ASCENDING)], unique=True, sparse=True)
+        await collection.create_index([("place_id", ASCENDING)], sparse=True)
 
     async def close(self) -> None:
         if self._client:
