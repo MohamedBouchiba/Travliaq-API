@@ -14,11 +14,10 @@ class Settings(BaseSettings):
     mongodb_collection_poi: str = Field("poi_details", alias="MONGODB_COLLECTION_POI")
 
     google_maps_api_key: str = Field(..., alias="GOOGLE_MAPS_API_KEY")
-    opentripmap_api_key: str = Field(..., alias="OPENTRIPMAP_API_KEY")
+    geoapify_api_key: str = Field(..., alias="GEOAPIFY_API_KEY")
 
     ttl_days: int = Field(365, description="Days before a POI document is considered stale")
     google_places_daily_cap: int = Field(9500, description="Soft cap to avoid exceeding free Google quotas")
-    opentripmap_daily_cap: int = Field(9500, description="Soft cap to avoid exceeding free OpenTripMap quotas")
     wikidata_user_agent: str = Field("poi-details-api/1.0", description="User agent used for Wikidata requests")
     default_detail_types: list[str] = Field(default_factory=lambda: ["hours", "pricing", "contact", "facts"])
 
