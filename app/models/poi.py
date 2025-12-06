@@ -29,7 +29,7 @@ class FactsInfo(BaseModel):
     unesco_site: bool | None = None
     instance_of: str | None = None
     description: str | None = None
-    image_url: str | None = None  # Wikimedia Commons image
+    image_urls: List[str] | None = None  # Up to 3 Wikimedia Commons images
     extra: Dict[str, Any] | None = None
 
 

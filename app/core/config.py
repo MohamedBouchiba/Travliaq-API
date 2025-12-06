@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     google_maps_api_key: str = Field(..., alias="GOOGLE_MAPS_API_KEY")
     geoapify_api_key: str = Field(..., alias="GEOAPIFY_API_KEY")
+    translation_service_url: str = Field("https://travliaq-transalte-production.up.railway.app", alias="TRANSLATION_SERVICE_URL")
 
     ttl_days: int = Field(365, description="Days before a POI document is considered stale")
     google_places_daily_cap: int = Field(9500, description="Soft cap to avoid exceeding free Google quotas")

@@ -15,6 +15,7 @@ from app.services.geoapify import GeoapifyClient
 from app.services.google_places import GooglePlacesClient
 from app.services.nominatim import NominatimClient
 from app.services.poi_repository import POIRepository
+from app.services.translation import TranslationClient
 from app.services.wikidata import WikidataClient
 from app.utils.normalization import build_poi_key
 
@@ -26,6 +27,7 @@ class EnrichmentService:
         google: GooglePlacesClient,
         nominatim: NominatimClient,
         geoapify: GeoapifyClient,
+        translation: TranslationClient,
         wikidata: WikidataClient,
         ttl_days: int,
         default_detail_types: list[str],
@@ -34,6 +36,7 @@ class EnrichmentService:
         self.google = google
         self.nominatim = nominatim
         self.geoapify = geoapify
+        self.translation = translation
         self.wikidata = wikidata
         self.ttl_days = ttl_days
         self.default_detail_types = default_detail_types
@@ -89,7 +92,12 @@ class EnrichmentService:
                 city=payload.city
             )
 
-        wikidata_norm = await self.wikidata.fetch(payload.poi_name, payload.city)
+        # 🌐 TRANSLATION: Translate POI name to English for better Wikidata matching
+        # Uses auto-detection: won't translate if already in English
+        poi_name_en = await self.translation.translate_to_english(payload.poi_name)
+        
+        # 📚 WIKIDATA: Fetch facts and image using English name
+        wikidata_norm = await self.wikidata.fetch(poi_name_en, payload.city)
 
         base_doc = existing or existing_by_place
         merged = self._merge_documents(

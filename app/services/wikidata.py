@@ -1,10 +1,11 @@
 from __future__ import annotations
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 import httpx
 from datetime import datetime
 
 
-# Query with proper description extraction AND image (P18)
+# Query with description AND multiple images (P18)
+# Using GROUP_CONCAT to get up to 3 images
 SPARQL_TEMPLATE = """
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX schema: <http://schema.org/>
@@ -12,7 +13,8 @@ PREFIX wdt: <http://www.wikidata.org/prop/direct/>
 PREFIX bd: <http://www.bigdata.com/rdf#>
 PREFIX wikibase: <http://wikiba.se/ontology#>
 
-SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel ?image WHERE {
+SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel 
+       (GROUP_CONCAT(DISTINCT ?image; separator="|") AS ?images) WHERE {
   ?item rdfs:label "%s"@en.
   OPTIONAL { ?item schema:description ?itemDescription. FILTER(LANG(?itemDescription) = "en") }
   OPTIONAL { ?item wdt:P571 ?inception. }
@@ -21,10 +23,11 @@ SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabe
   OPTIONAL { ?item wdt:P18 ?image. }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 }
+GROUP BY ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel
 LIMIT 1
 """
 
-# French label query (for French POI names)
+# French label query
 SPARQL_TEMPLATE_FR = """
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX schema: <http://schema.org/>
@@ -32,7 +35,8 @@ PREFIX wdt: <http://www.wikidata.org/prop/direct/>
 PREFIX bd: <http://www.bigdata.com/rdf#>
 PREFIX wikibase: <http://wikiba.se/ontology#>
 
-SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel ?image WHERE {
+SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel 
+       (GROUP_CONCAT(DISTINCT ?image; separator="|") AS ?images) WHERE {
   ?item rdfs:label "%s"@fr.
   OPTIONAL { ?item schema:description ?itemDescription. FILTER(LANG(?itemDescription) = "en") }
   OPTIONAL { ?item wdt:P571 ?inception. }
@@ -41,6 +45,7 @@ SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabe
   OPTIONAL { ?item wdt:P18 ?image. }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en,fr". }
 }
+GROUP BY ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel
 LIMIT 1
 """
 
@@ -52,7 +57,8 @@ PREFIX wdt: <http://www.wikidata.org/prop/direct/>
 PREFIX bd: <http://www.bigdata.com/rdf#>
 PREFIX wikibase: <http://wikiba.se/ontology#>
 
-SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel ?image WHERE {
+SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel 
+       (GROUP_CONCAT(DISTINCT ?image; separator="|") AS ?images) WHERE {
   ?item rdfs:label ?label.
   FILTER(LANG(?label) = "en" && CONTAINS(LCASE(?label), LCASE("%s")))
   OPTIONAL { ?item schema:description ?itemDescription. FILTER(LANG(?itemDescription) = "en") }
@@ -62,11 +68,14 @@ SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabe
   OPTIONAL { ?item wdt:P18 ?image. }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 }
+GROUP BY ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel
 LIMIT 1
 """
 
 
 class WikidataClient:
+    MAX_IMAGES = 3  # Maximum number of images to return
+    
     def __init__(self, user_agent: str, http_client: httpx.AsyncClient):
         self.user_agent = user_agent
         self.http = http_client or httpx.AsyncClient()
@@ -123,23 +132,26 @@ class WikidataClient:
             except ValueError:
                 year_built = None
         
-        # Get real description from schema:description, not just the label
+        # Get real description from schema:description
         description = binding.get("itemDescription", {}).get("value")
         label = binding.get("itemLabel", {}).get("value")
         
-        # If no description, don't use the label as description (it's not helpful)
         if not description or description == label:
             description = None
         
-        # 📸 Get Wikimedia Commons image URL
-        image_url = binding.get("image", {}).get("value")
+        # 📸 Get up to 3 Wikimedia Commons image URLs
+        images_str = binding.get("images", {}).get("value", "")
+        image_urls: List[str] = []
+        if images_str:
+            all_images = [url.strip() for url in images_str.split("|") if url.strip()]
+            image_urls = all_images[:self.MAX_IMAGES]  # Limit to 3
         
         return {
             "year_built": year_built,
             "unesco_site": bool(binding.get("heritageLabel")),
             "instance_of": binding.get("instanceLabel", {}).get("value"),
             "description": description,
-            "image_url": image_url,  # Wikimedia Commons image
+            "image_urls": image_urls,  # List of up to 3 Wikimedia Commons images
         }
 
     @staticmethod

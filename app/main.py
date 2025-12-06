@@ -11,6 +11,7 @@ from app.services.geoapify import GeoapifyClient
 from app.services.google_places import GooglePlacesClient
 from app.services.nominatim import NominatimClient
 from app.services.poi_repository import POIRepository
+from app.services.translation import TranslationClient
 from app.services.wikidata import WikidataClient
 
 settings = get_settings()
@@ -27,6 +28,7 @@ async def startup_event() -> None:
     google_client = GooglePlacesClient(settings.google_maps_api_key, app.state.http_client, settings.google_places_daily_cap)
     nominatim_client = NominatimClient(settings.wikidata_user_agent, app.state.http_client)
     geoapify_client = GeoapifyClient(settings.geoapify_api_key, app.state.http_client)
+    translation_client = TranslationClient(settings.translation_service_url, app.state.http_client)
     wikidata_client = WikidataClient(settings.wikidata_user_agent, app.state.http_client)
 
     app.state.enrichment_service = EnrichmentService(
@@ -34,6 +36,7 @@ async def startup_event() -> None:
         google=google_client,
         nominatim=nominatim_client,
         geoapify=geoapify_client,
+        translation=translation_client,
         wikidata=wikidata_client,
         ttl_days=settings.ttl_days,
         default_detail_types=settings.default_detail_types,
