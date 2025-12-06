@@ -29,13 +29,15 @@ class FactsInfo(BaseModel):
     unesco_site: bool | None = None
     instance_of: str | None = None
     description: str | None = None
+    image_url: str | None = None  # Wikimedia Commons image
     extra: Dict[str, Any] | None = None
 
 
 class SourcesInfo(BaseModel):
     google_places: Dict[str, Any] | None = None
-    opentripmap: Dict[str, Any] | None = None
+    geoapify: Dict[str, Any] | None = None
     wikidata: Dict[str, Any] | None = None
+    nominatim: Dict[str, Any] | None = None
 
 
 class POIDocument(BaseModel):

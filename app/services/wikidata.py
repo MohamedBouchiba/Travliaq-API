@@ -4,7 +4,7 @@ import httpx
 from datetime import datetime
 
 
-# Query with proper description extraction
+# Query with proper description extraction AND image (P18)
 SPARQL_TEMPLATE = """
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX schema: <http://schema.org/>
@@ -12,12 +12,13 @@ PREFIX wdt: <http://www.wikidata.org/prop/direct/>
 PREFIX bd: <http://www.bigdata.com/rdf#>
 PREFIX wikibase: <http://wikiba.se/ontology#>
 
-SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel WHERE {
+SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel ?image WHERE {
   ?item rdfs:label "%s"@en.
   OPTIONAL { ?item schema:description ?itemDescription. FILTER(LANG(?itemDescription) = "en") }
   OPTIONAL { ?item wdt:P571 ?inception. }
   OPTIONAL { ?item wdt:P1435 ?heritage. }
   OPTIONAL { ?item wdt:P31 ?instance. }
+  OPTIONAL { ?item wdt:P18 ?image. }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 }
 LIMIT 1
@@ -31,12 +32,13 @@ PREFIX wdt: <http://www.wikidata.org/prop/direct/>
 PREFIX bd: <http://www.bigdata.com/rdf#>
 PREFIX wikibase: <http://wikiba.se/ontology#>
 
-SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel WHERE {
+SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel ?image WHERE {
   ?item rdfs:label "%s"@fr.
   OPTIONAL { ?item schema:description ?itemDescription. FILTER(LANG(?itemDescription) = "en") }
   OPTIONAL { ?item wdt:P571 ?inception. }
   OPTIONAL { ?item wdt:P1435 ?heritage. }
   OPTIONAL { ?item wdt:P31 ?instance. }
+  OPTIONAL { ?item wdt:P18 ?image. }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en,fr". }
 }
 LIMIT 1
@@ -50,13 +52,14 @@ PREFIX wdt: <http://www.wikidata.org/prop/direct/>
 PREFIX bd: <http://www.bigdata.com/rdf#>
 PREFIX wikibase: <http://wikiba.se/ontology#>
 
-SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel WHERE {
+SELECT ?item ?itemLabel ?itemDescription ?inception ?heritageLabel ?instanceLabel ?image WHERE {
   ?item rdfs:label ?label.
   FILTER(LANG(?label) = "en" && CONTAINS(LCASE(?label), LCASE("%s")))
   OPTIONAL { ?item schema:description ?itemDescription. FILTER(LANG(?itemDescription) = "en") }
   OPTIONAL { ?item wdt:P571 ?inception. }
   OPTIONAL { ?item wdt:P1435 ?heritage. }
   OPTIONAL { ?item wdt:P31 ?instance. }
+  OPTIONAL { ?item wdt:P18 ?image. }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 }
 LIMIT 1
@@ -128,11 +131,15 @@ class WikidataClient:
         if not description or description == label:
             description = None
         
+        # 📸 Get Wikimedia Commons image URL
+        image_url = binding.get("image", {}).get("value")
+        
         return {
             "year_built": year_built,
             "unesco_site": bool(binding.get("heritageLabel")),
             "instance_of": binding.get("instanceLabel", {}).get("value"),
             "description": description,
+            "image_url": image_url,  # Wikimedia Commons image
         }
 
     @staticmethod
