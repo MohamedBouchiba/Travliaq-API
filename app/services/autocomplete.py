@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from app.models.autocomplete import AutocompleteRequest, AutocompleteResult
+from app.models.autocomplete import AutocompleteResult
 
 if TYPE_CHECKING:
     from app.db.postgres import PostgresManager
@@ -18,45 +18,73 @@ class AutocompleteService:
     def __init__(self, postgres_manager: PostgresManager):
         self._postgres = postgres_manager
 
-    def search(self, request: AutocompleteRequest) -> list[AutocompleteResult]:
+    def search(
+        self,
+        q: str,
+        limit: int = 10,
+        types: list[str] | None = None
+    ) -> list[AutocompleteResult]:
         """
         Search locations matching the query.
 
         Args:
-            request: Autocomplete request with query and limit
+            q: Search query string
+            limit: Maximum number of results (default: 10, max: 20)
+            types: List of types to filter (default: all types)
 
         Returns:
             List of matching locations ordered by relevance (rank_signal DESC)
+            Empty list if q < 3 characters
 
         The search uses the `search_autocomplete` view which combines:
-        - Countries (type='country', ref=iso2)
-        - Cities (type='city', ref=uuid)
-        - Airports (type='airport', ref=iata)
+        - Countries (type='country', id=iso2)
+        - Cities (type='city', id=uuid)
+        - Airports (type='airport', id=iata)
 
         Search strategy:
-        1. Exact match on start of label (highest priority)
-        2. Partial match anywhere in label
-        3. Ordered by rank_signal (population for cities, fixed values for others)
+        1. Return empty if query < 3 chars
+        2. Exact match on start of label (highest priority)
+        3. Partial match anywhere in label
+        4. Ordered by rank_signal (population for cities, fixed values for others)
         """
+
+        # Return empty results if query too short
+        search_term = q.strip()
+        if len(search_term) < 3:
+            logger.debug(f"Query too short (< 3 chars): '{search_term}'")
+            return []
 
         conn = None
         try:
             conn = self._postgres.get_connection()
             cursor = conn.cursor()
 
+            # Build WHERE clause for type filtering
+            type_filter = ""
+            query_params = []
+
+            if types and len(types) > 0:
+                # Filter by specified types
+                placeholders = ",".join(["%s"] * len(types))
+                type_filter = f"AND type IN ({placeholders})"
+                query_params.extend(types)
+
             # Query optimisée avec recherche insensible à la casse
-            # Priorité aux résultats qui commencent par la requête
-            query = """
+            # Extraction de lat/lon depuis le champ geography avec ST_Y et ST_X
+            query = f"""
                 SELECT
                     type,
                     ref,
                     label,
                     country_code,
-                    slug
+                    slug,
+                    ST_Y(location::geometry) as lat,
+                    ST_X(location::geometry) as lon,
+                    rank_signal
                 FROM search_autocomplete
                 WHERE
-                    label ILIKE %s
-                    OR label ILIKE %s
+                    (label ILIKE %s OR label ILIKE %s)
+                    {type_filter}
                 ORDER BY
                     CASE
                         WHEN LOWER(label) LIKE LOWER(%s) THEN 1
@@ -68,36 +96,37 @@ class AutocompleteService:
                 LIMIT %s
             """
 
-            # Paramètres de recherche
-            search_term = request.query.strip()
             starts_with = f"{search_term}%"
             contains = f"%{search_term}%"
 
-            cursor.execute(
-                query,
-                (
-                    starts_with,  # WHERE label ILIKE %s (commence par)
-                    contains,     # OR label ILIKE %s (contient)
-                    starts_with,  # ORDER BY CASE WHEN... (priorité commence par)
-                    contains,     # ORDER BY CASE WHEN... (priorité contient)
-                    request.limit
-                )
-            )
+            # Build complete parameter list
+            params = [
+                starts_with,  # WHERE label ILIKE %s (commence par)
+                contains,     # OR label ILIKE %s (contient)
+                *query_params,  # Type filters if any
+                starts_with,  # ORDER BY CASE WHEN... (priorité commence par)
+                contains,     # ORDER BY CASE WHEN... (priorité contient)
+                limit
+            ]
+
+            cursor.execute(query, params)
 
             results = []
             for row in cursor.fetchall():
                 results.append(
                     AutocompleteResult(
                         type=row[0],
-                        ref=row[1],
+                        id=row[1],
                         label=row[2],
                         country_code=row[3],
-                        slug=row[4]
+                        slug=row[4],
+                        lat=row[5],  # Can be None
+                        lon=row[6]   # Can be None
                     )
                 )
 
             cursor.close()
-            logger.info(f"Autocomplete search for '{search_term}' returned {len(results)} results")
+            logger.info(f"Autocomplete search for '{search_term}' (types={types}) returned {len(results)} results")
 
             return results
 

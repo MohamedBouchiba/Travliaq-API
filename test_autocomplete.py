@@ -5,34 +5,38 @@ Usage: python test_autocomplete.py
 """
 
 import requests
-import json
 from typing import Dict, Any
 
 
 BASE_URL = "http://localhost:8000"
 
 
-def test_autocomplete(query: str, limit: int = 5) -> Dict[str, Any]:
+def test_autocomplete(
+    query: str,
+    limit: int = 10,
+    types: str = "city,airport,country"
+) -> Dict[str, Any]:
     """Test l'endpoint d'autocomplétion."""
-    url = f"{BASE_URL}/search/autocomplete"
+    url = f"{BASE_URL}/autocomplete"
 
-    payload = {
-        "query": query,
-        "limit": limit
+    params = {
+        "q": query,
+        "limit": limit,
+        "types": types
     }
 
     print(f"\n{'='*60}")
-    print(f"🔍 Recherche: '{query}' (limit: {limit})")
+    print(f"🔍 Recherche: '{query}' (limit: {limit}, types: {types})")
     print(f"{'='*60}")
 
     try:
-        response = requests.post(url, json=payload)
+        response = requests.get(url, params=params)
         response.raise_for_status()
 
         data = response.json()
 
         print(f"\n✅ Statut: {response.status_code}")
-        print(f"📊 Résultats trouvés: {data['count']}")
+        print(f"📊 Résultats trouvés: {len(data['results'])}")
 
         if data['results']:
             print(f"\n📍 Résultats:")
@@ -43,14 +47,21 @@ def test_autocomplete(query: str, limit: int = 5) -> Dict[str, Any]:
                     'airport': '✈️'
                 }.get(result['type'], '📍')
 
-                print(f"   {i}. {icon} {result['label']}")
+                lat_lon = ""
+                if result.get('lat') and result.get('lon'):
+                    lat_lon = f" ({result['lat']:.4f}, {result['lon']:.4f})"
+
+                print(f"   {i}. {icon} {result['label']}{lat_lon}")
                 print(f"      Type: {result['type']}")
-                print(f"      Ref: {result['ref']}")
+                print(f"      ID: {result['id']}")
                 print(f"      Country: {result['country_code']}")
                 print(f"      Slug: {result['slug']}")
                 print()
         else:
-            print("\n⚠️  Aucun résultat trouvé")
+            if len(query.strip()) < 3:
+                print("\n⚠️  Query < 3 caractères → résultats vides (comportement normal)")
+            else:
+                print("\n⚠️  Aucun résultat trouvé")
 
         return data
 
@@ -94,16 +105,17 @@ def main():
 
     # Tests de recherche
     test_cases = [
-        ("Par", 5),          # Recherche de "Paris"
-        ("CDG", 3),          # Code aéroport
-        ("Fran", 5),         # Recherche de pays
-        ("New", 5),          # Recherche de ville
-        ("Lon", 5),          # "London"
-        ("A", 3),            # Recherche courte (1 caractère)
+        ("par", 10, "city,airport,country"),    # Recherche de "Paris" - tous types
+        ("CDG", 5, "airport"),                   # Code aéroport - filtré
+        ("Fran", 10, "country"),                 # Recherche de pays - filtré
+        ("New", 10, "city,airport"),             # Villes et aéroports uniquement
+        ("Lon", 10, "city,airport,country"),     # "London" - tous types
+        ("Pa", 5, "city,airport,country"),       # 2 caractères - devrait retourner []
+        ("A", 3, "city,airport,country"),        # 1 caractère - devrait retourner []
     ]
 
-    for query, limit in test_cases:
-        test_autocomplete(query, limit)
+    for query, limit, types in test_cases:
+        test_autocomplete(query, limit, types)
 
     print("\n" + "="*60)
     print("✅ Tests terminés!")

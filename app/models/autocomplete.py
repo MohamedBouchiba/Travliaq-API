@@ -1,25 +1,7 @@
 """Pydantic models for search autocomplete."""
 
 from pydantic import BaseModel, Field
-from typing import Literal
-
-
-class AutocompleteRequest(BaseModel):
-    """Request model for autocomplete search."""
-
-    query: str = Field(
-        ...,
-        min_length=1,
-        max_length=100,
-        description="Search query (min 1 character, recommended 3+)",
-        examples=["Par", "New Yo", "CDG"]
-    )
-    limit: int = Field(
-        default=5,
-        ge=1,
-        le=20,
-        description="Maximum number of results to return (default: 5, max: 20)"
-    )
+from typing import Literal, Optional
 
 
 class AutocompleteResult(BaseModel):
@@ -29,9 +11,9 @@ class AutocompleteResult(BaseModel):
         ...,
         description="Type of location"
     )
-    ref: str = Field(
+    id: str = Field(
         ...,
-        description="Unique reference (ISO2 for countries, UUID for cities, IATA for airports)"
+        description="Unique ID (ISO2 for countries, UUID for cities, IATA for airports)"
     )
     label: str = Field(
         ...,
@@ -46,20 +28,24 @@ class AutocompleteResult(BaseModel):
         ...,
         description="URL-friendly slug"
     )
+    lat: Optional[float] = Field(
+        None,
+        description="Latitude (null for countries)"
+    )
+    lon: Optional[float] = Field(
+        None,
+        description="Longitude (null for countries)"
+    )
 
 
 class AutocompleteResponse(BaseModel):
     """Response model for autocomplete search."""
 
-    results: list[AutocompleteResult] = Field(
-        ...,
-        description="List of matching locations ordered by relevance"
-    )
-    query: str = Field(
+    q: str = Field(
         ...,
         description="Original search query"
     )
-    count: int = Field(
-        ...,
-        description="Number of results returned"
+    results: list[AutocompleteResult] = Field(
+        default_factory=list,
+        description="List of matching locations ordered by relevance (empty if q < 3 chars)"
     )
