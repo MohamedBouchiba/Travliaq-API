@@ -10,7 +10,13 @@ router = APIRouter(tags=["search"])
 
 def get_autocomplete_service(request: Request) -> AutocompleteService:
     """Dependency to get the autocomplete service from app state."""
-    return request.app.state.autocomplete_service
+    service = request.app.state.autocomplete_service
+    if service is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Autocomplete service unavailable - PostgreSQL not configured"
+        )
+    return service
 
 
 @router.get("/autocomplete", response_model=AutocompleteResponse)

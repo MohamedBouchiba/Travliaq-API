@@ -29,9 +29,18 @@ async def startup_event() -> None:
     app.state.mongo_manager = MongoManager(settings)
     await app.state.mongo_manager.init_indexes()
 
-    # Initialize PostgreSQL
-    app.state.postgres_manager = PostgresManager(settings)
-    app.state.postgres_manager.init_pool(min_conn=2, max_conn=10)
+    # Initialize PostgreSQL (optional - only if credentials are provided)
+    if settings.pg_host and settings.pg_user and settings.pg_password:
+        app.state.postgres_manager = PostgresManager(settings)
+        app.state.postgres_manager.init_pool(min_conn=2, max_conn=10)
+
+        # Initialize autocomplete service
+        app.state.autocomplete_service = AutocompleteService(
+            postgres_manager=app.state.postgres_manager
+        )
+    else:
+        app.state.postgres_manager = None
+        app.state.autocomplete_service = None
 
     # Initialize POI enrichment services
     repository = POIRepository(app.state.mongo_manager.collection(), ttl_days=settings.ttl_days)
@@ -52,18 +61,16 @@ async def startup_event() -> None:
         default_detail_types=settings.default_detail_types,
     )
 
-    # Initialize autocomplete service
-    app.state.autocomplete_service = AutocompleteService(
-        postgres_manager=app.state.postgres_manager
-    )
-
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
     client: httpx.AsyncClient = app.state.http_client
     await client.aclose()
     await app.state.mongo_manager.close()
-    app.state.postgres_manager.close_all()
+
+    # Close PostgreSQL if it was initialized
+    if app.state.postgres_manager:
+        app.state.postgres_manager.close_all()
 
 
 app.include_router(router)

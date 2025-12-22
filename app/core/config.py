@@ -15,11 +15,11 @@ class Settings(BaseSettings):
     mongodb_db: str = Field(..., alias="MONGODB_DB")
     mongodb_collection_poi: str = Field("poi_details", alias="MONGODB_COLLECTION_POI")
 
-    # PostgreSQL/Supabase
-    pg_host: str = Field(..., alias="PG_HOST")
+    # PostgreSQL/Supabase (optional - for autocomplete feature)
+    pg_host: str | None = Field(None, alias="PG_HOST")
     pg_database: str = Field("postgres", alias="PG_DATABASE")
-    pg_user: str = Field(..., alias="PG_USER")
-    pg_password: str = Field(..., alias="PG_PASSWORD")
+    pg_user: str | None = Field(None, alias="PG_USER")
+    pg_password: str | None = Field(None, alias="PG_PASSWORD")
     pg_port: int = Field(5432, alias="PG_PORT")
     pg_sslmode: str = Field("require", alias="PG_SSLMODE")
 
