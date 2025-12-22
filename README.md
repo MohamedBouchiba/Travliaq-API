@@ -1,12 +1,23 @@
-# POI Details API
+# Travliaq API
 
-Microservice FastAPI pour récupérer et enrichir les informations d'un Point of Interest (POI).
+Microservice FastAPI pour:
+1. **POI Details**: Récupérer et enrichir les informations d'un Point of Interest (POI)
+2. **Search Autocomplete** ⭐: Autocomplétion de recherche de lieux (pays, villes, aéroports)
 
 ## Fonctionnalités
-- Endpoint unique `POST /poi-details` pour retourner un POI normalisé.
-- Persistance MongoDB avec clé canonique `poi_key` et index sur `poi_key` / `place_id`.
-- Lecture puis enrichissement via Google Places (Essentials), OpenTripMap (free), Wikidata.
-- Règles de complétude et TTL (par défaut 365 jours) pour éviter les appels externes inutiles.
+
+### POI Details
+- Endpoint `POST /poi-details` pour retourner un POI normalisé
+- Persistance MongoDB avec clé canonique `poi_key` et index sur `poi_key` / `place_id`
+- Enrichissement via Google Places (Essentials), OpenTripMap (free), Wikidata
+- Règles de complétude et TTL (par défaut 365 jours) pour éviter les appels externes inutiles
+
+### Search Autocomplete ⭐ NEW
+- Endpoint `POST /search/autocomplete` pour l'autocomplétion de recherche
+- Support pays, villes et aéroports
+- Recherche intelligente avec priorité et rang de pertinence
+- Vue PostgreSQL/Supabase optimisée
+- **Documentation complète**: [AUTOCOMPLETE_API.md](AUTOCOMPLETE_API.md)
 
 ## Démarrage local
 ```bash
@@ -19,11 +30,22 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ## Variables d'environnement
 Ajoutez un fichier `.env` (voir `.env.example`) avec :
 
-- `GOOGLE_MAPS_API_KEY`
-- `OPENTRIPMAP_API_KEY`
+### MongoDB (POI Details)
 - `MONGODB_URI`
 - `MONGODB_DB`
 - `MONGODB_COLLECTION_POI` (optionnel, défaut `poi_details`)
+
+### PostgreSQL/Supabase (Search Autocomplete)
+- `PG_HOST`
+- `PG_DATABASE`
+- `PG_USER`
+- `PG_PASSWORD`
+- `PG_PORT` (optionnel, défaut `5432`)
+- `PG_SSLMODE` (optionnel, défaut `require`)
+
+### API Keys
+- `GOOGLE_MAPS_API_KEY`
+- `GEOAPIFY_API_KEY`
 
 ## Utilisation
 Requête :

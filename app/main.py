@@ -4,9 +4,12 @@ from fastapi import FastAPI
 import httpx
 
 from app.api.routes import router
+from app.api.search_routes import router as search_router
 from app.core.config import get_settings
 from app.db.mongo import MongoManager
+from app.db.postgres import PostgresManager
 from app.services.enrichment import EnrichmentService
+from app.services.autocomplete import AutocompleteService
 from app.services.geoapify import GeoapifyClient
 from app.services.google_places import GooglePlacesClient
 from app.services.nominatim import NominatimClient
@@ -21,9 +24,16 @@ app = FastAPI(title=settings.app_name)
 @app.on_event("startup")
 async def startup_event() -> None:
     app.state.http_client = httpx.AsyncClient()
+
+    # Initialize MongoDB
     app.state.mongo_manager = MongoManager(settings)
     await app.state.mongo_manager.init_indexes()
 
+    # Initialize PostgreSQL
+    app.state.postgres_manager = PostgresManager(settings)
+    app.state.postgres_manager.init_pool(min_conn=2, max_conn=10)
+
+    # Initialize POI enrichment services
     repository = POIRepository(app.state.mongo_manager.collection(), ttl_days=settings.ttl_days)
     google_client = GooglePlacesClient(settings.google_maps_api_key, app.state.http_client, settings.google_places_daily_cap)
     nominatim_client = NominatimClient(settings.wikidata_user_agent, app.state.http_client)
@@ -42,12 +52,19 @@ async def startup_event() -> None:
         default_detail_types=settings.default_detail_types,
     )
 
+    # Initialize autocomplete service
+    app.state.autocomplete_service = AutocompleteService(
+        postgres_manager=app.state.postgres_manager
+    )
+
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
     client: httpx.AsyncClient = app.state.http_client
     await client.aclose()
     await app.state.mongo_manager.close()
+    app.state.postgres_manager.close_all()
 
 
 app.include_router(router)
+app.include_router(search_router)
