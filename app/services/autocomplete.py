@@ -45,9 +45,14 @@ class AutocompleteService:
 
         Search strategy:
         1. Return empty if query < 3 chars
-        2. Exact match on start of label (highest priority)
-        3. Partial match anywhere in label
-        4. Ordered by rank_signal (population for cities, fixed values for others)
+        2. Search in both label AND ref (airport codes like CDG, ORY)
+        3. Priority ordering:
+           - Exact code match (CDG, ORY) - HIGHEST PRIORITY
+           - Exact label match (India)
+           - Label starts with query (Ind...)
+           - Label contains query (...india...)
+        4. Within each priority level: airports > cities > countries
+        5. Finally ordered by rank_signal (population for cities, fixed values for others)
         """
 
         # Return empty results if query too short
@@ -73,6 +78,7 @@ class AutocompleteService:
 
             # Query optimisée avec recherche insensible à la casse
             # Extraction de lat/lon depuis le champ geography avec ST_Y et ST_X
+            # Supporte aussi la recherche par code (ref) pour les aéroports (ex: CDG, ORY)
             query = f"""
                 SELECT
                     type,
@@ -85,17 +91,19 @@ class AutocompleteService:
                     rank_signal
                 FROM search_autocomplete
                 WHERE
-                    (label ILIKE %s OR label ILIKE %s)
+                    (label ILIKE %s OR label ILIKE %s OR ref ILIKE %s)
                     {type_filter}
                 ORDER BY
                     CASE
-                        WHEN LOWER(label) LIKE LOWER(%s) THEN 1
+                        WHEN UPPER(ref) = UPPER(%s) THEN 0
+                        WHEN LOWER(label) = LOWER(%s) THEN 1
                         WHEN LOWER(label) LIKE LOWER(%s) THEN 2
-                        ELSE 3
+                        WHEN LOWER(label) LIKE LOWER(%s) THEN 3
+                        ELSE 4
                     END,
                     CASE
-                        WHEN type = 'city' THEN 1
-                        WHEN type = 'airport' THEN 2
+                        WHEN type = 'airport' THEN 1
+                        WHEN type = 'city' THEN 2
                         WHEN type = 'country' THEN 3
                     END,
                     rank_signal DESC,
@@ -110,7 +118,10 @@ class AutocompleteService:
             params = [
                 starts_with,  # WHERE label ILIKE %s (commence par)
                 contains,     # OR label ILIKE %s (contient)
+                search_term,  # OR ref ILIKE %s (code exact comme CDG)
                 *query_params,  # Type filters if any
+                search_term,  # ORDER BY CASE WHEN UPPER(ref) = UPPER(%s) (code exact - priorité absolue)
+                search_term,  # ORDER BY CASE WHEN LOWER(label) = LOWER(%s) (label exact)
                 starts_with,  # ORDER BY CASE WHEN... (priorité commence par)
                 contains,     # ORDER BY CASE WHEN... (priorité contient)
                 limit
