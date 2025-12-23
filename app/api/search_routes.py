@@ -84,7 +84,7 @@ async def search_autocomplete(
 
     ## Behavior
     - Returns `results: []` if query < 3 characters
-    - Results ordered by relevance (countries > airports > cities by population)
+    - Results ordered by: match relevance, then type (cities > airports > countries), then by population/importance (rank_signal DESC)
     - Case-insensitive search
     - Prioritizes results starting with query over those containing it
     """

@@ -91,6 +91,11 @@ class AutocompleteService:
                         WHEN LOWER(label) LIKE LOWER(%s) THEN 2
                         ELSE 3
                     END,
+                    CASE
+                        WHEN type = 'city' THEN 1
+                        WHEN type = 'airport' THEN 2
+                        WHEN type = 'country' THEN 3
+                    END,
                     rank_signal DESC,
                     label ASC
                 LIMIT %s
