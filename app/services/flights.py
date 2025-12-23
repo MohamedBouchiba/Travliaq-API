@@ -91,8 +91,8 @@ class FlightsService:
                 "country_code": request.country_code,
             }
 
-            # Check cache first
-            cached = self._redis.get("flight_search", cache_params)
+            # Check cache first (v2 to avoid old format conflicts)
+            cached = self._redis.get("flight_search_v2", cache_params)
             if cached:
                 logger.info(f"Returning cached flights for {request.departure_id} → {request.arrival_id}")
                 return FlightSearchResponse(**cached)
@@ -135,10 +135,12 @@ class FlightsService:
             # Check API response status
             if not data.get("status"):
                 logger.error(f"API returned error: {data.get('message')}")
+                logger.error(f"Full API response: {data}")
                 return None
 
             # Parse response
             api_data = data.get("data", {})
+            logger.debug(f"API data structure: {list(api_data.keys())}")
             itineraries_data = api_data.get("itineraries", {})
 
             # Extract flights from different categories
@@ -164,7 +166,7 @@ class FlightsService:
 
             # Cache the result for 24 hours
             self._redis.set(
-                "flight_search",
+                "flight_search_v2",
                 cache_params,
                 response.model_dump(),
                 ttl_seconds=self.CACHE_TTL
@@ -200,32 +202,42 @@ class FlightsService:
                 for flight_data in raw_flights:
                     try:
                         # Parse departure airport
+                        dep_data = flight_data.get("departure_airport", {})
                         dep_airport = Airport(
-                            airport_name=flight_data.get("departure_airport", {}).get("name", ""),
-                            airport_code=flight_data.get("departure_airport", {}).get("id", ""),
-                            time=flight_data.get("departure_airport", {}).get("time", "")
+                            airport_name=dep_data.get("airport_name", ""),
+                            airport_code=dep_data.get("airport_code", ""),
+                            time=dep_data.get("time", "")
                         )
 
                         # Parse arrival airport
+                        arr_data = flight_data.get("arrival_airport", {})
                         arr_airport = Airport(
-                            airport_name=flight_data.get("arrival_airport", {}).get("name", ""),
-                            airport_code=flight_data.get("arrival_airport", {}).get("id", ""),
-                            time=flight_data.get("arrival_airport", {}).get("time", "")
+                            airport_name=arr_data.get("airport_name", ""),
+                            airport_code=arr_data.get("airport_code", ""),
+                            time=arr_data.get("time", "")
+                        )
+
+                        # Parse duration
+                        duration_data = flight_data.get("duration", {})
+                        duration = FlightDuration(
+                            raw=duration_data.get("raw", 0),
+                            text=duration_data.get("text", "")
                         )
 
                         # Create flight segment
                         segment = FlightSegment(
                             departure_airport=dep_airport,
                             arrival_airport=arr_airport,
-                            duration=flight_data.get("duration", 0),
+                            duration=duration,
                             airline=flight_data.get("airline", ""),
                             airline_logo=flight_data.get("airline_logo", ""),
-                            travel_class=flight_data.get("travel_class", ""),
                             flight_number=flight_data.get("flight_number", ""),
+                            aircraft=flight_data.get("aircraft"),
+                            seat=flight_data.get("seat"),
                             legroom=flight_data.get("legroom"),
                             extensions=flight_data.get("extensions"),
-                            overnight=flight_data.get("overnight"),
-                            airplane=flight_data.get("airplane")
+                            travel_class=flight_data.get("travel_class"),
+                            overnight=flight_data.get("overnight")
                         )
                         flights.append(segment)
                     except Exception as e:
@@ -241,8 +253,10 @@ class FlightsService:
                         try:
                             layover = Layover(
                                 duration=layover_data.get("duration", 0),
-                                name=layover_data.get("name", ""),
-                                id=layover_data.get("id", ""),
+                                airport_name=layover_data.get("airport_name", ""),
+                                airport_code=layover_data.get("airport_code", ""),
+                                duration_label=layover_data.get("duration_label"),
+                                city=layover_data.get("city"),
                                 overnight=layover_data.get("overnight")
                             )
                             layovers.append(layover)
@@ -256,7 +270,7 @@ class FlightsService:
                 if bags_data:
                     try:
                         bags = Baggage(
-                            carry_on=bags_data.get("carry_on", False),
+                            carry_on=bags_data.get("carry_on"),
                             checked=bags_data.get("checked")
                         )
                     except Exception as e:
@@ -268,24 +282,33 @@ class FlightsService:
                 if carbon_data:
                     try:
                         carbon = CarbonEmissions(
-                            this_flight=carbon_data.get("this_flight", 0),
+                            CO2e=carbon_data.get("CO2e", 0),
                             typical_for_this_route=carbon_data.get("typical_for_this_route", 0),
-                            difference_percent=carbon_data.get("difference_percent", 0)
+                            difference_percent=carbon_data.get("difference_percent", 0),
+                            higher=carbon_data.get("higher")
                         )
                     except Exception as e:
                         logger.warning(f"Failed to parse carbon emissions: {e}")
 
+                # Parse delay
+                delay_value = None
+                delay_data = raw.get("delay")
+                if delay_data and isinstance(delay_data, dict):
+                    delay_value = delay_data.get("text")
+                elif isinstance(delay_data, (int, float)):
+                    delay_value = delay_data
+
                 # Create itinerary with all data
                 itinerary = FlightItinerary(
-                    flights=flights,
+                    flights=flights if flights else None,
                     layovers=layovers,
-                    total_duration=raw.get("total_duration", 0),
+                    total_duration=raw.get("total_duration") or raw.get("duration", {}).get("raw"),
                     price=raw.get("price", 0.0),
                     booking_token=raw.get("booking_token"),
                     carbon_emissions=carbon,
                     bags=bags,
                     airline_logo=raw.get("airline_logo"),
-                    delay=raw.get("delay"),
+                    delay=delay_value,
                     self_transfer=raw.get("self_transfer"),
                     # Legacy fields for backward compatibility
                     departure_time=raw.get("departure_time"),

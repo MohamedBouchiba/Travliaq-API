@@ -59,43 +59,47 @@ class FlightSegment(BaseModel):
     """Individual flight segment details."""
     departure_airport: Airport = Field(..., description="Departure airport details")
     arrival_airport: Airport = Field(..., description="Arrival airport details")
-    duration: int = Field(..., description="Flight duration in minutes")
+    duration: FlightDuration = Field(..., description="Flight duration")
     airline: str = Field(..., description="Airline name")
     airline_logo: str = Field(..., description="URL to airline logo")
-    travel_class: str = Field(..., description="Travel class")
     flight_number: str = Field(..., description="Flight number")
+    aircraft: Optional[str] = Field(None, description="Aircraft type")
+    seat: Optional[str] = Field(None, description="Seat type description")
     legroom: Optional[str] = Field(None, description="Legroom information")
     extensions: Optional[list[str]] = Field(None, description="Flight features/amenities")
+    travel_class: Optional[str] = Field(None, description="Travel class")
     overnight: Optional[bool] = Field(None, description="Whether flight is overnight")
-    airplane: Optional[str] = Field(None, description="Aircraft type")
 
 
 class Layover(BaseModel):
     """Layover information between flight segments."""
     duration: int = Field(..., description="Layover duration in minutes")
-    name: str = Field(..., description="Layover airport name")
-    id: str = Field(..., description="Layover airport IATA code")
+    airport_name: str = Field(..., description="Layover airport name")
+    airport_code: str = Field(..., description="Layover airport IATA code")
+    duration_label: Optional[str] = Field(None, description="Human-readable duration")
+    city: Optional[str] = Field(None, description="Layover city")
     overnight: Optional[bool] = Field(None, description="Whether layover is overnight")
 
 
 class Baggage(BaseModel):
     """Baggage allowance information."""
-    carry_on: bool = Field(..., description="Carry-on bag included")
+    carry_on: Optional[int] = Field(None, description="Number of carry-on bags included")
     checked: Optional[int] = Field(None, description="Number of checked bags included")
 
 
 class CarbonEmissions(BaseModel):
     """Carbon emissions data for the flight."""
-    this_flight: int = Field(..., description="CO2e emissions for this flight in grams")
+    CO2e: int = Field(..., description="CO2e emissions for this flight in grams")
     typical_for_this_route: int = Field(..., description="Typical CO2e emissions for this route in grams")
     difference_percent: int = Field(..., description="Percentage difference from typical")
+    higher: Optional[int] = Field(None, description="Difference in grams from typical")
 
 
 class FlightItinerary(BaseModel):
     """Complete flight itinerary with all details."""
-    flights: list[FlightSegment] = Field(..., description="List of flight segments")
+    flights: Optional[list[FlightSegment]] = Field(None, description="List of flight segments")
     layovers: Optional[list[Layover]] = Field(None, description="Layover information")
-    total_duration: int = Field(..., description="Total trip duration in minutes")
+    total_duration: Optional[int] = Field(None, description="Total trip duration in minutes")
 
     # Pricing and booking
     price: float = Field(..., description="Price in specified currency")
