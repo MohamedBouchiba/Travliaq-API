@@ -11,6 +11,7 @@ from app.db.postgres import PostgresManager
 from app.services.enrichment import EnrichmentService
 from app.services.autocomplete import AutocompleteService
 from app.services.airports import AirportsService
+from app.services.cities import CitiesService
 from app.services.geoapify import GeoapifyClient
 from app.services.google_places import GooglePlacesClient
 from app.services.nominatim import NominatimClient
@@ -44,10 +45,16 @@ async def startup_event() -> None:
         app.state.airports_service = AirportsService(
             postgres_manager=app.state.postgres_manager
         )
+
+        # Initialize cities service
+        app.state.cities_service = CitiesService(
+            postgres_manager=app.state.postgres_manager
+        )
     else:
         app.state.postgres_manager = None
         app.state.autocomplete_service = None
         app.state.airports_service = None
+        app.state.cities_service = None
 
     # Initialize POI enrichment services
     repository = POIRepository(app.state.mongo_manager.collection(), ttl_days=settings.ttl_days)

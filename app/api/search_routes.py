@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, Request, HTTPException, Query, Body
 
 from app.models.autocomplete import AutocompleteResponse
 from app.models.airports import NearestAirportsRequest, NearestAirportsResponse
+from app.models.cities import TopCitiesResponse
 from app.services.autocomplete import AutocompleteService
 from app.services.airports import AirportsService
+from app.services.cities import CitiesService
 
 router = APIRouter(tags=["search"])
 
@@ -28,6 +30,17 @@ def get_airports_service(request: Request) -> AirportsService:
         raise HTTPException(
             status_code=503,
             detail="Airports service unavailable - PostgreSQL not configured"
+        )
+    return service
+
+
+def get_cities_service(request: Request) -> CitiesService:
+    """Dependency to get the cities service from app state."""
+    service = request.app.state.cities_service
+    if service is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Cities service unavailable - PostgreSQL not configured"
         )
     return service
 
@@ -222,4 +235,101 @@ async def find_nearest_airports(
         raise HTTPException(
             status_code=500,
             detail=f"Error finding nearest airports: {str(e)}"
+        )
+
+
+@router.get("/top-cities/{country_code}", response_model=TopCitiesResponse)
+async def get_top_cities(
+    country_code: str,
+    limit: int = Query(5, ge=1, le=20, description="Number of cities to return"),
+    service: CitiesService = Depends(get_cities_service)
+) -> TopCitiesResponse:
+    """
+    Get the top cities by population for a given country.
+
+    ## Features
+    - **Population-based ranking**: Cities sorted by population (largest first)
+    - **Flexible limit**: Request 1-20 cities (default: 5)
+    - **Geographic data**: Includes coordinates for each city
+
+    ## Parameters
+    - **country_code** (required): ISO2 country code (e.g., "FR", "US", "GB")
+    - **limit** (optional): Number of cities to return (default: 5, max: 20)
+
+    ## Example Request
+    ```
+    GET /top-cities/FR?limit=5
+    ```
+
+    ## Example Response
+    ```json
+    {
+      "country_code": "FR",
+      "total_cities": 2847,
+      "cities": [
+        {
+          "id": "3978405a-2f88-40fd-a9d1-1b7c896626ff",
+          "name": "Paris",
+          "country_code": "FR",
+          "slug": "paris",
+          "population": 2138551,
+          "lat": 48.8566,
+          "lon": 2.3522
+        },
+        {
+          "id": "uuid-marseille",
+          "name": "Marseille",
+          "country_code": "FR",
+          "slug": "marseille",
+          "population": 869815,
+          "lat": 43.2965,
+          "lon": 5.3698
+        },
+        {
+          "id": "uuid-lyon",
+          "name": "Lyon",
+          "country_code": "FR",
+          "slug": "lyon",
+          "population": 513275,
+          "lat": 45.7640,
+          "lon": 4.8357
+        }
+      ]
+    }
+    ```
+
+    ## Behavior
+    - Returns 404 if country code not found or has no cities
+    - Case-insensitive country code matching (fr = FR)
+    - Cities ordered by: population DESC, then rank_signal DESC
+    - Includes total_cities count for the country
+
+    ## Error Cases
+    - **404 Not Found**: Country code not found or has no cities
+    - **503 Service Unavailable**: PostgreSQL not configured
+    - **500 Internal Server Error**: Unexpected error during search
+    """
+    try:
+        result = service.get_top_cities_by_country(
+            country_code=country_code,
+            limit=limit
+        )
+
+        if result is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No cities found for country code '{country_code}'. "
+                       f"Please check the country code (use ISO2 format like 'FR', 'US')."
+            )
+
+        return result
+
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving top cities: {str(e)}"
         )
