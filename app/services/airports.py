@@ -202,7 +202,13 @@ class AirportsService:
         limit: int
     ) -> list[AirportResult]:
         """
-        Find nearest airports to a geographic location using PostGIS.
+        Find nearest commercial airports to a geographic location using PostGIS.
+
+        Only returns airports with valid IATA codes (3 letters) and excludes:
+        - Military airports (RAF, Air Force, Naval, Navy, Army, Air Base, Airbase, Camp, Base)
+        - Private airports (Executive, Biggin Hill, etc.)
+        - Small airfields (Airstrip, Aerodrome, Aérodrome, Field)
+        - Heliports
 
         Args:
             conn: Database connection
@@ -211,13 +217,14 @@ class AirportsService:
             limit: Maximum number of airports
 
         Returns:
-            List of AirportResult sorted by distance
+            List of AirportResult sorted by distance (commercial airports only)
         """
         cursor = conn.cursor()
 
         # Use PostGIS ST_Distance to calculate distances
         # ST_MakePoint creates a point, ST_Distance calculates distance
         # Convert to kilometers (PostGIS returns meters for geography type)
+        # Filter for commercial airports only (those with valid IATA codes)
         query = """
             SELECT
                 ref as iata,
@@ -234,6 +241,25 @@ class AirportsService:
             WHERE
                 type = 'airport'
                 AND location IS NOT NULL
+                AND ref IS NOT NULL
+                AND LENGTH(ref) = 3  -- Only airports with valid IATA codes
+                AND label NOT ILIKE '%RAF%'  -- Exclude RAF (Royal Air Force)
+                AND label NOT ILIKE '%Air Force%'  -- Exclude Air Force bases
+                AND label NOT ILIKE '%Military%'  -- Exclude military
+                AND label NOT ILIKE '%Naval%'  -- Exclude naval
+                AND label NOT ILIKE '%Navy%'  -- Exclude navy
+                AND label NOT ILIKE '%Army%'  -- Exclude army
+                AND label NOT ILIKE '%Air Base%'  -- Exclude air bases
+                AND label NOT ILIKE '%Airbase%'  -- Exclude airbases (one word)
+                AND label NOT ILIKE '%Camp%'  -- Exclude camps
+                AND label NOT ILIKE '%Base%'  -- Exclude bases
+                AND label NOT ILIKE '%Airstrip%'  -- Exclude airstrips
+                AND label NOT ILIKE '%Aerodrome%'  -- Exclude aerodromes
+                AND label NOT ILIKE '%Aérodrome%'  -- Exclude aérodromes (French)
+                AND label NOT ILIKE '%Heliport%'  -- Exclude heliports
+                AND label NOT ILIKE '%Field%'  -- Exclude fields
+                AND label NOT ILIKE '%Biggin Hill%'  -- Exclude known private/GA airports
+                AND label NOT ILIKE '%Executive%'  -- Exclude executive airports
             ORDER BY distance_km ASC
             LIMIT %s
         """

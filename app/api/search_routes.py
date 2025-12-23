@@ -142,6 +142,7 @@ async def find_nearest_airports(
     Find the nearest airports to a city.
 
     ## Features
+    - **Commercial airports only**: Returns only airports with IATA codes (excludes military/private airports)
     - **Fuzzy matching**: Handles typos and spelling variations (min 80% similarity)
     - **Country filtering**: Optional country code to improve match accuracy
     - **Geographic distance**: Uses PostGIS to calculate actual distances

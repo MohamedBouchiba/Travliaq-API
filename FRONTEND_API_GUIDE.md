@@ -374,6 +374,7 @@ airports.map(airport => ({
 - ⚠️ Retourne 404 si code pays invalide
 
 ### Nearest Airports
+- ✅ **Aéroports commerciaux uniquement** (filtre automatique sur les codes IATA)
 - ✅ Tolérant aux fautes (Fuzzy matching 80%+)
 - ✅ Distance réelle (PostGIS great circle)
 - ✅ Retourne le nom corrigé de la ville
@@ -507,3 +508,13 @@ R: Non, certaines villes peuvent avoir `population: null`. Dans ce cas, le tri u
 
 **Q: Dois-je toujours fournir le country_code pour nearest-airports?**
 R: Non, c'est optionnel. Mais c'est **fortement recommandé** car cela améliore la précision du fuzzy matching, surtout pour les villes avec des noms communs (ex: "Paris" existe aux USA et en France).
+
+**Q: Pourquoi l'endpoint ne retourne-t-il que des aéroports commerciaux?**
+R: L'endpoint applique des filtres automatiques très complets:
+- ✅ Seuls les aéroports avec un **code IATA valide** (3 lettres)
+- ❌ Exclut les aéroports **militaires** : RAF, Air Force, Naval, Navy, Army, Air Base, Airbase, Camp, Base
+- ❌ Exclut les aéroports **privés** : Executive, Biggin Hill
+- ❌ Exclut les **petits aérodromes** : Airstrip, Aerodrome, Aérodrome, Field
+- ❌ Exclut les **héliports** : Heliport
+
+Ces 20+ filtres garantissent que seuls les aéroports commerciaux internationaux accessibles au public sont retournés.
