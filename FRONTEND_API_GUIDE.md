@@ -249,9 +249,11 @@ cities.map(city => ({
 
 ### Match Score
 
-- **100** : Correspondance exacte
-- **80-99** : Fuzzy match (fautes de frappe tolérées)
-- **< 80** : Ville non trouvée (404)
+- **100.0** : Correspondance exacte
+- **80.0-99.9** : Fuzzy match (fautes de frappe tolérées)
+- **< 80.0** : Ville non trouvée (404)
+
+Note: Le score est un nombre décimal entre 0 et 100.
 
 ### Error Responses
 

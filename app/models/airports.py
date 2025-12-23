@@ -73,7 +73,7 @@ class NearestAirportsResponse(BaseModel):
         ...,
         description="UUID of the matched city"
     )
-    match_score: int = Field(
+    match_score: float = Field(
         ...,
         description="Fuzzy match score (0-100, 100 = exact match)"
     )

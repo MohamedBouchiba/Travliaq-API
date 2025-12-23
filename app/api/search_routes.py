@@ -202,8 +202,8 @@ async def find_nearest_airports(
     ```
 
     ## Behavior
-    - Returns 404 if no matching city found (match score < 80%)
-    - Match score: 100 = exact match, 80-99 = fuzzy match
+    - Returns 404 if no matching city found (match score < 80)
+    - Match score: 100.0 = exact match, 80.0-99.9 = fuzzy match
     - Distances calculated using PostGIS (great circle distance)
     - Results sorted by distance (ascending)
 
