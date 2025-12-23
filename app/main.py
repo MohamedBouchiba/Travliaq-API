@@ -6,6 +6,7 @@ import httpx
 from app.api.routes import router
 from app.api.search_routes import router as search_router
 from app.api.admin_routes import router as admin_router
+from app.api.flights_routes import router as flights_router
 from app.core.config import get_settings
 from app.core.cache import cleanup_expired_cache
 from app.db.mongo import MongoManager
@@ -14,6 +15,8 @@ from app.services.enrichment import EnrichmentService
 from app.services.autocomplete import AutocompleteService
 from app.services.airports import AirportsService
 from app.services.cities import CitiesService
+from app.services.flights import FlightsService
+from app.services.redis_cache import RedisCache
 from app.services.geoapify import GeoapifyClient
 from app.services.google_places import GooglePlacesClient
 from app.services.nominatim import NominatimClient
@@ -68,6 +71,18 @@ async def startup_event() -> None:
         app.state.airports_service = None
         app.state.cities_service = None
 
+    # Initialize Redis cache for flights
+    app.state.redis_cache = RedisCache(
+        url=settings.upstash_redis_rest_url,
+        token=settings.upstash_redis_rest_token
+    )
+
+    # Initialize flights service with Redis cache
+    app.state.flights_service = FlightsService(
+        api_key=settings.google_flight_api_key,
+        redis_cache=app.state.redis_cache
+    )
+
     # Initialize POI enrichment services
     repository = POIRepository(app.state.mongo_manager.collection(), ttl_days=settings.ttl_days)
     google_client = GooglePlacesClient(settings.google_maps_api_key, app.state.http_client, settings.google_places_daily_cap)
@@ -101,4 +116,5 @@ async def shutdown_event() -> None:
 
 app.include_router(router)
 app.include_router(search_router)
+app.include_router(flights_router)
 app.include_router(admin_router)

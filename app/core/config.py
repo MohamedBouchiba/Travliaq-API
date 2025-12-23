@@ -26,7 +26,12 @@ class Settings(BaseSettings):
     # External APIs
     google_maps_api_key: str = Field(..., alias="GOOGLE_MAPS_API_KEY")
     geoapify_api_key: str = Field(..., alias="GEOAPIFY_API_KEY")
+    google_flight_api_key: str = Field(..., alias="GOOGLE_FLIGHT_API")
     translation_service_url: str = Field("https://travliaq-transalte-production.up.railway.app", alias="TRANSLATION_SERVICE_URL")
+
+    # Upstash Redis (for flights cache)
+    upstash_redis_rest_url: str = Field(..., alias="UPSTASH_REDIS_REST_URL")
+    upstash_redis_rest_token: str = Field(..., alias="UPSTASH_REDIS_REST_TOKEN")
 
     # Settings
     ttl_days: int = Field(365, description="Days before a POI document is considered stale")
