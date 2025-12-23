@@ -194,6 +194,7 @@ cities.map(city => ({
 ```json
 {
   "city": "Paris",
+  "country_code": "FR",
   "limit": 3
 }
 ```
@@ -201,6 +202,7 @@ cities.map(city => ({
 | Field  | Type   | Required | Default | Description |
 |--------|--------|----------|---------|-------------|
 | `city` | string | ✓        | -       | Nom de la ville (min 2 chars, typos OK!) |
+| `country_code` | string | - | - | Code ISO2 du pays (ex: "FR", "US") pour améliorer la précision |
 | `limit`| int    | -        | 3       | Nombre d'aéroports (max: 10) |
 
 ### Response Example
@@ -272,13 +274,18 @@ Note: Le score est un nombre décimal entre 0 et 100.
 ### Frontend Tips
 
 ```javascript
-// Exemple d'appel
-const findNearestAirports = async (cityName) => {
+// Exemple d'appel simple
+const findNearestAirports = async (cityName, countryCode = null) => {
   try {
+    const body = { city: cityName, limit: 3 };
+    if (countryCode) {
+      body.country_code = countryCode; // Améliore la précision du match
+    }
+
     const response = await fetch('/nearest-airports', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ city: cityName, limit: 3 })
+      body: JSON.stringify(body)
     });
 
     if (!response.ok) {
@@ -303,6 +310,10 @@ const findNearestAirports = async (cityName) => {
   }
 };
 
+// Exemples d'utilisation
+await findNearestAirports("Paris"); // Sans filtre pays
+await findNearestAirports("Paris", "FR"); // Avec filtre pays (recommandé)
+
 // Affichage suggéré des aéroports
 airports.map(airport => ({
   label: `${airport.name} (${airport.distance_km.toFixed(1)} km)`,
@@ -324,9 +335,11 @@ airports.map(airport => ({
 
 2. User sélectionne "Paris, FR"
    └─> Trouver aéroports (/nearest-airports)
-       └─> Body: { city: "Paris", limit: 3 }
+       └─> Body: { city: "Paris", country_code: "FR", limit: 3 }
        └─> Affiche: ["ORY (14 km)", "CDG (23 km)", "BVA (69 km)"]
 ```
+
+**Astuce:** Extraire le country_code de l'autocomplete pour l'utiliser dans nearest-airports.
 
 ### Scénario 2: Explorer un pays
 
@@ -337,9 +350,11 @@ airports.map(airport => ({
 
 2. User clique sur "Marseille"
    └─> Trouver aéroports (/nearest-airports)
-       └─> Body: { city: "Marseille", limit: 3 }
+       └─> Body: { city: "Marseille", country_code: "FR", limit: 3 }
        └─> Affiche: ["MRS (5 km)", ...]
 ```
+
+**Astuce:** Utiliser le code pays connu pour améliorer la précision.
 
 ---
 
@@ -362,6 +377,7 @@ airports.map(airport => ({
 - ✅ Tolérant aux fautes (Fuzzy matching 80%+)
 - ✅ Distance réelle (PostGIS great circle)
 - ✅ Retourne le nom corrigé de la ville
+- ✅ country_code optionnel pour améliorer la précision (recommandé)
 - ⚠️ POST request (body JSON)
 - ⚠️ Peut retourner 404 si ville vraiment introuvable
 
@@ -406,12 +422,17 @@ function AirportFinder() {
     []
   );
 
-  // Recherche aéroports
-  const findAirports = async (cityName) => {
+  // Recherche aéroports avec country_code pour meilleure précision
+  const findAirports = async (cityName, countryCode = null) => {
+    const body = { city: cityName, limit: 3 };
+    if (countryCode) {
+      body.country_code = countryCode;
+    }
+
     const res = await fetch('/nearest-airports', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ city: cityName, limit: 3 })
+      body: JSON.stringify(body)
     });
 
     if (!res.ok) {
@@ -433,7 +454,13 @@ function AirportFinder() {
 
       <ul>
         {suggestions.map(city => (
-          <li key={city.id} onClick={() => findAirports(city.label.split(',')[0])}>
+          <li
+            key={city.id}
+            onClick={() => findAirports(
+              city.label.split(',')[0],
+              city.country_code  // Utiliser le country_code de l'autocomplete
+            )}
+          >
             {city.label}
           </li>
         ))}
@@ -477,3 +504,6 @@ R: Utilisez `/top-cities/{country_code}` avec le code ISO2 du pays (ex: `/top-ci
 
 **Q: Les villes retournées ont-elles toutes une population?**
 R: Non, certaines villes peuvent avoir `population: null`. Dans ce cas, le tri utilise `rank_signal` comme fallback.
+
+**Q: Dois-je toujours fournir le country_code pour nearest-airports?**
+R: Non, c'est optionnel. Mais c'est **fortement recommandé** car cela améliore la précision du fuzzy matching, surtout pour les villes avec des noms communs (ex: "Paris" existe aux USA et en France).

@@ -13,6 +13,13 @@ class NearestAirportsRequest(BaseModel):
         min_length=2,
         examples=["Paris", "Londre", "New Yor"]  # Examples with typos
     )
+    country_code: Optional[str] = Field(
+        None,
+        description="ISO2 country code to improve matching accuracy (e.g., 'FR', 'US')",
+        min_length=2,
+        max_length=2,
+        examples=["FR", "US", "GB"]
+    )
     limit: int = Field(
         3,
         ge=1,

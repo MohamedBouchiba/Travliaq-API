@@ -25,7 +25,8 @@ class AirportsService:
     def find_nearest_airports(
         self,
         city_query: str,
-        limit: int = 3
+        limit: int = 3,
+        country_code: Optional[str] = None
     ) -> Optional[NearestAirportsResponse]:
         """
         Find nearest airports to a city using fuzzy matching and geographic distance.
@@ -33,6 +34,7 @@ class AirportsService:
         Args:
             city_query: City name (can contain typos)
             limit: Maximum number of airports to return
+            country_code: Optional ISO2 country code to filter cities (e.g., 'FR', 'US')
 
         Returns:
             NearestAirportsResponse with matched city and nearest airports
@@ -40,8 +42,9 @@ class AirportsService:
 
         Strategy:
         1. Find best matching city using fuzzy matching (>80% similarity)
-        2. Use PostGIS ST_Distance to find nearest airports
-        3. Return sorted by distance
+        2. Optionally filter by country code for improved accuracy
+        3. Use PostGIS ST_Distance to find nearest airports
+        4. Return sorted by distance
         """
         city_query = city_query.strip()
 
@@ -54,7 +57,7 @@ class AirportsService:
             conn = self._postgres.get_connection()
 
             # Step 1: Find best matching city using fuzzy matching
-            city_match = self._find_best_city_match(conn, city_query)
+            city_match = self._find_best_city_match(conn, city_query, country_code)
 
             if not city_match:
                 logger.info(f"No city match found for query: '{city_query}'")
@@ -62,9 +65,10 @@ class AirportsService:
 
             city_id, city_name, city_lat, city_lon, match_score = city_match
 
+            country_filter_msg = f" (country: {country_code})" if country_code else ""
             logger.info(
                 f"Matched '{city_query}' to '{city_name}' "
-                f"(score: {match_score}, id: {city_id})"
+                f"(score: {match_score}, id: {city_id}){country_filter_msg}"
             )
 
             # Step 2: Find nearest airports using PostGIS distance
@@ -95,10 +99,16 @@ class AirportsService:
     def _find_best_city_match(
         self,
         conn,
-        query: str
+        query: str,
+        country_code: Optional[str] = None
     ) -> Optional[Tuple[str, str, float, float, int]]:
         """
         Find best matching city using fuzzy matching.
+
+        Args:
+            conn: Database connection
+            query: City name query
+            country_code: Optional ISO2 country code to filter results
 
         Returns:
             Tuple of (city_id, city_name, lat, lon, match_score) or None
@@ -108,9 +118,17 @@ class AirportsService:
         # Normalize query for better matching
         query_normalized = query.lower().strip()
 
+        # Build WHERE clause with optional country filter
+        country_filter = ""
+        params = []
+
+        if country_code:
+            country_filter = "AND UPPER(country_code) = UPPER(%s)"
+            params.append(country_code)
+
         # Get all cities with their coordinates
         # Limit to reasonable candidates (cities with population data preferred)
-        cursor.execute("""
+        query_sql = f"""
             SELECT
                 id,
                 name,
@@ -124,6 +142,7 @@ class AirportsService:
                     name ILIKE %s
                     OR name ILIKE %s
                 )
+                {country_filter}
             ORDER BY
                 CASE
                     WHEN LOWER(name) = LOWER(%s) THEN 1
@@ -132,12 +151,23 @@ class AirportsService:
                 END,
                 population DESC NULLS LAST
             LIMIT 50
-        """, (
+        """
+
+        query_params = [
             f"{query}%",  # Starts with
             f"%{query}%",  # Contains
+        ]
+
+        # Add country_code parameter if provided
+        if country_code:
+            query_params.append(country_code)
+
+        query_params.extend([
             query,  # Exact match check
             f"{query}%"  # Starts with check
-        ))
+        ])
+
+        cursor.execute(query_sql, tuple(query_params))
 
         candidates = cursor.fetchall()
         cursor.close()

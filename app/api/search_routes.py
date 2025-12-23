@@ -143,17 +143,20 @@ async def find_nearest_airports(
 
     ## Features
     - **Fuzzy matching**: Handles typos and spelling variations (min 80% similarity)
+    - **Country filtering**: Optional country code to improve match accuracy
     - **Geographic distance**: Uses PostGIS to calculate actual distances
     - **Sorted results**: Returns airports sorted by distance (closest first)
 
     ## Parameters
     - **city** (required): City name (fuzzy matching supported - typos OK!)
+    - **country_code** (optional): ISO2 country code (e.g., 'FR', 'US') to filter cities by country
     - **limit** (optional): Number of airports to return (default: 3, max: 10)
 
     ## Example Request
     ```json
     {
       "city": "Londre",
+      "country_code": "GB",
       "limit": 3
     }
     ```
@@ -215,7 +218,8 @@ async def find_nearest_airports(
     try:
         result = service.find_nearest_airports(
             city_query=request.city,
-            limit=request.limit
+            limit=request.limit,
+            country_code=request.country_code
         )
 
         if result is None:
