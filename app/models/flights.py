@@ -48,27 +48,71 @@ class FlightDuration(BaseModel):
     text: str = Field(..., description="Human-readable duration (e.g., '2 hr 20 min')")
 
 
-class FlightLeg(BaseModel):
-    """Individual flight leg details."""
-    departure_airport: str = Field(..., description="Departure airport IATA code")
-    arrival_airport: str = Field(..., description="Arrival airport IATA code")
-    departure_time: str = Field(..., description="Departure time")
-    arrival_time: str = Field(..., description="Arrival time")
-    airline: Optional[str] = Field(None, description="Airline name")
-    flight_number: Optional[str] = Field(None, description="Flight number")
-    duration: FlightDuration
+class Airport(BaseModel):
+    """Airport details for departure or arrival."""
+    airport_name: str = Field(..., description="Full airport name")
+    airport_code: str = Field(..., description="IATA airport code")
+    time: str = Field(..., description="Departure or arrival time")
+
+
+class FlightSegment(BaseModel):
+    """Individual flight segment details."""
+    departure_airport: Airport = Field(..., description="Departure airport details")
+    arrival_airport: Airport = Field(..., description="Arrival airport details")
+    duration: int = Field(..., description="Flight duration in minutes")
+    airline: str = Field(..., description="Airline name")
+    airline_logo: str = Field(..., description="URL to airline logo")
+    travel_class: str = Field(..., description="Travel class")
+    flight_number: str = Field(..., description="Flight number")
+    legroom: Optional[str] = Field(None, description="Legroom information")
+    extensions: Optional[list[str]] = Field(None, description="Flight features/amenities")
+    overnight: Optional[bool] = Field(None, description="Whether flight is overnight")
+    airplane: Optional[str] = Field(None, description="Aircraft type")
+
+
+class Layover(BaseModel):
+    """Layover information between flight segments."""
+    duration: int = Field(..., description="Layover duration in minutes")
+    name: str = Field(..., description="Layover airport name")
+    id: str = Field(..., description="Layover airport IATA code")
+    overnight: Optional[bool] = Field(None, description="Whether layover is overnight")
+
+
+class Baggage(BaseModel):
+    """Baggage allowance information."""
+    carry_on: bool = Field(..., description="Carry-on bag included")
+    checked: Optional[int] = Field(None, description="Number of checked bags included")
+
+
+class CarbonEmissions(BaseModel):
+    """Carbon emissions data for the flight."""
+    this_flight: int = Field(..., description="CO2e emissions for this flight in grams")
+    typical_for_this_route: int = Field(..., description="Typical CO2e emissions for this route in grams")
+    difference_percent: int = Field(..., description="Percentage difference from typical")
 
 
 class FlightItinerary(BaseModel):
-    """Flight itinerary with all details."""
-    departure_time: str = Field(..., description="Overall departure time")
-    arrival_time: str = Field(..., description="Overall arrival time")
-    duration: FlightDuration
+    """Complete flight itinerary with all details."""
+    flights: list[FlightSegment] = Field(..., description="List of flight segments")
+    layovers: Optional[list[Layover]] = Field(None, description="Layover information")
+    total_duration: int = Field(..., description="Total trip duration in minutes")
+
+    # Pricing and booking
     price: float = Field(..., description="Price in specified currency")
-    stops: int = Field(..., description="Number of stops (0 = non-stop)")
-    legs: Optional[list[FlightLeg]] = Field(None, description="Individual flight legs")
-    airline: Optional[str] = Field(None, description="Primary airline")
     booking_token: Optional[str] = Field(None, description="Token for booking details")
+
+    # Additional details
+    carbon_emissions: Optional[CarbonEmissions] = Field(None, description="Carbon emissions data")
+    bags: Optional[Baggage] = Field(None, description="Baggage allowance")
+    airline_logo: Optional[str] = Field(None, description="URL to primary airline logo")
+    delay: Optional[int] = Field(None, description="Delay in minutes")
+    self_transfer: Optional[bool] = Field(None, description="Whether transfer is self-organized")
+
+    # Legacy fields for backward compatibility
+    departure_time: Optional[str] = Field(None, description="Overall departure time")
+    arrival_time: Optional[str] = Field(None, description="Overall arrival time")
+    stops: Optional[int] = Field(None, description="Number of stops (0 = non-stop)")
+    airline: Optional[str] = Field(None, description="Primary airline")
 
 
 class FlightSearchResponse(BaseModel):

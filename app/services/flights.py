@@ -10,6 +10,11 @@ from app.models.flights import (
     FlightSearchRequest,
     FlightSearchResponse,
     FlightItinerary,
+    FlightSegment,
+    Airport,
+    Layover,
+    Baggage,
+    CarbonEmissions,
     FlightDuration,
     CalendarPricesRequest,
     CalendarPricesResponse,
@@ -189,27 +194,110 @@ class FlightsService:
 
         for raw in raw_itineraries:
             try:
-                # Parse duration
-                duration_raw = raw.get("duration", {})
-                duration = FlightDuration(
-                    raw=duration_raw.get("raw", 0),
-                    text=duration_raw.get("text", "Unknown")
-                )
+                # Parse flight segments
+                flights = []
+                raw_flights = raw.get("flights", [])
+                for flight_data in raw_flights:
+                    try:
+                        # Parse departure airport
+                        dep_airport = Airport(
+                            airport_name=flight_data.get("departure_airport", {}).get("name", ""),
+                            airport_code=flight_data.get("departure_airport", {}).get("id", ""),
+                            time=flight_data.get("departure_airport", {}).get("time", "")
+                        )
 
+                        # Parse arrival airport
+                        arr_airport = Airport(
+                            airport_name=flight_data.get("arrival_airport", {}).get("name", ""),
+                            airport_code=flight_data.get("arrival_airport", {}).get("id", ""),
+                            time=flight_data.get("arrival_airport", {}).get("time", "")
+                        )
+
+                        # Create flight segment
+                        segment = FlightSegment(
+                            departure_airport=dep_airport,
+                            arrival_airport=arr_airport,
+                            duration=flight_data.get("duration", 0),
+                            airline=flight_data.get("airline", ""),
+                            airline_logo=flight_data.get("airline_logo", ""),
+                            travel_class=flight_data.get("travel_class", ""),
+                            flight_number=flight_data.get("flight_number", ""),
+                            legroom=flight_data.get("legroom"),
+                            extensions=flight_data.get("extensions"),
+                            overnight=flight_data.get("overnight"),
+                            airplane=flight_data.get("airplane")
+                        )
+                        flights.append(segment)
+                    except Exception as e:
+                        logger.warning(f"Failed to parse flight segment: {e}")
+                        continue
+
+                # Parse layovers
+                layovers = None
+                raw_layovers = raw.get("layovers")
+                if raw_layovers:
+                    layovers = []
+                    for layover_data in raw_layovers:
+                        try:
+                            layover = Layover(
+                                duration=layover_data.get("duration", 0),
+                                name=layover_data.get("name", ""),
+                                id=layover_data.get("id", ""),
+                                overnight=layover_data.get("overnight")
+                            )
+                            layovers.append(layover)
+                        except Exception as e:
+                            logger.warning(f"Failed to parse layover: {e}")
+                            continue
+
+                # Parse baggage
+                bags = None
+                bags_data = raw.get("bags")
+                if bags_data:
+                    try:
+                        bags = Baggage(
+                            carry_on=bags_data.get("carry_on", False),
+                            checked=bags_data.get("checked")
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to parse baggage: {e}")
+
+                # Parse carbon emissions
+                carbon = None
+                carbon_data = raw.get("carbon_emissions")
+                if carbon_data:
+                    try:
+                        carbon = CarbonEmissions(
+                            this_flight=carbon_data.get("this_flight", 0),
+                            typical_for_this_route=carbon_data.get("typical_for_this_route", 0),
+                            difference_percent=carbon_data.get("difference_percent", 0)
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to parse carbon emissions: {e}")
+
+                # Create itinerary with all data
                 itinerary = FlightItinerary(
-                    departure_time=raw.get("departure_time", ""),
-                    arrival_time=raw.get("arrival_time", ""),
-                    duration=duration,
+                    flights=flights,
+                    layovers=layovers,
+                    total_duration=raw.get("total_duration", 0),
                     price=raw.get("price", 0.0),
-                    stops=raw.get("stops", 0),
-                    airline=raw.get("airline"),
-                    booking_token=raw.get("booking_token")
+                    booking_token=raw.get("booking_token"),
+                    carbon_emissions=carbon,
+                    bags=bags,
+                    airline_logo=raw.get("airline_logo"),
+                    delay=raw.get("delay"),
+                    self_transfer=raw.get("self_transfer"),
+                    # Legacy fields for backward compatibility
+                    departure_time=raw.get("departure_time"),
+                    arrival_time=raw.get("arrival_time"),
+                    stops=raw.get("stops"),
+                    airline=raw.get("airline")
                 )
 
                 itineraries.append(itinerary)
 
             except Exception as e:
-                logger.warning(f"Failed to parse itinerary: {e}")
+                logger.warning(f"Failed to parse itinerary: {e}", exc_info=True)
                 continue
 
         return itineraries
