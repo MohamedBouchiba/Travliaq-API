@@ -243,23 +243,23 @@ class AirportsService:
                 AND location IS NOT NULL
                 AND ref IS NOT NULL
                 AND LENGTH(ref) = 3  -- Only airports with valid IATA codes
-                AND label NOT ILIKE '%RAF%'  -- Exclude RAF (Royal Air Force)
-                AND label NOT ILIKE '%Air Force%'  -- Exclude Air Force bases
-                AND label NOT ILIKE '%Military%'  -- Exclude military
-                AND label NOT ILIKE '%Naval%'  -- Exclude naval
-                AND label NOT ILIKE '%Navy%'  -- Exclude navy
-                AND label NOT ILIKE '%Army%'  -- Exclude army
-                AND label NOT ILIKE '%Air Base%'  -- Exclude air bases
-                AND label NOT ILIKE '%Airbase%'  -- Exclude airbases (one word)
-                AND label NOT ILIKE '%Camp%'  -- Exclude camps
-                AND label NOT ILIKE '%Base%'  -- Exclude bases
-                AND label NOT ILIKE '%Airstrip%'  -- Exclude airstrips
-                AND label NOT ILIKE '%Aerodrome%'  -- Exclude aerodromes
-                AND label NOT ILIKE '%Aérodrome%'  -- Exclude aérodromes (French)
-                AND label NOT ILIKE '%Heliport%'  -- Exclude heliports
-                AND label NOT ILIKE '%Field%'  -- Exclude fields
-                AND label NOT ILIKE '%Biggin Hill%'  -- Exclude known private/GA airports
-                AND label NOT ILIKE '%Executive%'  -- Exclude executive airports
+                AND label NOT ILIKE '%%RAF%%'  -- Exclude RAF (Royal Air Force)
+                AND label NOT ILIKE '%%Air Force%%'  -- Exclude Air Force bases
+                AND label NOT ILIKE '%%Military%%'  -- Exclude military
+                AND label NOT ILIKE '%%Naval%%'  -- Exclude naval
+                AND label NOT ILIKE '%%Navy%%'  -- Exclude navy
+                AND label NOT ILIKE '%%Army%%'  -- Exclude army
+                AND label NOT ILIKE '%%Air Base%%'  -- Exclude air bases
+                AND label NOT ILIKE '%%Airbase%%'  -- Exclude airbases (one word)
+                AND label NOT ILIKE '%%Camp%%'  -- Exclude camps
+                AND label NOT ILIKE '%%Base%%'  -- Exclude bases
+                AND label NOT ILIKE '%%Airstrip%%'  -- Exclude airstrips
+                AND label NOT ILIKE '%%Aerodrome%%'  -- Exclude aerodromes
+                AND label NOT ILIKE '%%Aérodrome%%'  -- Exclude aérodromes (French)
+                AND label NOT ILIKE '%%Heliport%%'  -- Exclude heliports
+                AND label NOT ILIKE '%%Field%%'  -- Exclude fields
+                AND label NOT ILIKE '%%Biggin Hill%%'  -- Exclude known private/GA airports
+                AND label NOT ILIKE '%%Executive%%'  -- Exclude executive airports
             ORDER BY distance_km ASC
             LIMIT %s
         """
