@@ -5,6 +5,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from app.models.autocomplete import AutocompleteResult
+from app.core.cache import cache_result
 
 if TYPE_CHECKING:
     from app.db.postgres import PostgresManager
@@ -18,6 +19,7 @@ class AutocompleteService:
     def __init__(self, postgres_manager: PostgresManager):
         self._postgres = postgres_manager
 
+    @cache_result(ttl_seconds=600)  # Cache for 10 minutes
     def search(
         self,
         q: str,

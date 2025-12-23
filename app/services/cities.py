@@ -3,6 +3,7 @@
 from typing import Optional
 from app.db.postgres import PostgresManager
 from app.models.cities import TopCitiesResponse, CityInfo
+from app.core.cache import cache_result
 
 
 class CitiesService:
@@ -16,6 +17,7 @@ class CitiesService:
         """
         self.postgres_manager = postgres_manager
 
+    @cache_result(ttl_seconds=1800)  # Cache for 30 minutes
     def get_top_cities_by_country(
         self,
         country_code: str,

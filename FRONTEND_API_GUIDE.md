@@ -364,10 +364,18 @@ airports.map(airport => ({
 - ⚠️ Peut retourner 404 si ville vraiment introuvable
 
 ### Performance
-- Autocomplete: ~50-100ms
-- Top Cities: ~30-80ms
-- Nearest Airports: ~100-200ms
+- Autocomplete: ~50-100ms (première requête) / ~5-10ms (en cache)
+- Top Cities: ~30-80ms (première requête) / ~5-10ms (en cache)
+- Nearest Airports: ~100-200ms (première requête) / ~5-10ms (en cache)
 - Pas de limite de rate (mais restez raisonnables)
+
+### Cache
+- ✅ Cache en mémoire côté serveur pour réduire la charge DB
+- ✅ Autocomplete: 10 minutes de cache
+- ✅ Top Cities: 30 minutes de cache (les populations changent rarement)
+- ✅ Nearest Airports: 15 minutes de cache
+- ✅ Nettoyage automatique des entrées expirées toutes les heures
+- ⚠️ Les réponses en cache sont quasi-instantanées
 
 ---
 

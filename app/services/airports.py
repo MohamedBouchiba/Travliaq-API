@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Optional, Tuple
 from rapidfuzz import fuzz
 
 from app.models.airports import AirportResult, NearestAirportsResponse
+from app.core.cache import cache_result
 
 if TYPE_CHECKING:
     from app.db.postgres import PostgresManager
@@ -20,6 +21,7 @@ class AirportsService:
     def __init__(self, postgres_manager: PostgresManager):
         self._postgres = postgres_manager
 
+    @cache_result(ttl_seconds=900)  # Cache for 15 minutes
     def find_nearest_airports(
         self,
         city_query: str,
