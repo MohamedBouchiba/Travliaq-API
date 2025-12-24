@@ -1,13 +1,13 @@
 """Cities API endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from app.models.cities import TopCitiesResponse
 from app.services.cities import CitiesService
 
 router = APIRouter(prefix="/cities", tags=["Cities"])
 
 
-def get_cities_service(request) -> CitiesService:
+def get_cities_service(request: Request) -> CitiesService:
     """Dependency to get the cities service."""
     return request.app.state.cities_service
 
