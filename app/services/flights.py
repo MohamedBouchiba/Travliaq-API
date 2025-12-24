@@ -168,7 +168,7 @@ class FlightsService:
             self._redis.set(
                 "flight_search_v2",
                 cache_params,
-                response.model_dump(),
+                response.model_dump(mode='json'),
                 ttl_seconds=self.CACHE_TTL
             )
 
@@ -446,7 +446,7 @@ class FlightsService:
             self._redis.set(
                 "calendar_prices",
                 cache_params,
-                response.model_dump(),
+                response.model_dump(mode='json'),
                 ttl_seconds=self.CACHE_TTL
             )
 

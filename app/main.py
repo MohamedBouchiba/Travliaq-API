@@ -7,6 +7,7 @@ from app.api.routes import router
 from app.api.search_routes import router as search_router
 from app.api.admin_routes import router as admin_router
 from app.api.flights_routes import router as flights_router
+from app.api.cities_routes import router as cities_router
 from app.core.config import get_settings
 from app.core.cache import cleanup_expired_cache
 from app.db.mongo import MongoManager
@@ -117,4 +118,5 @@ async def shutdown_event() -> None:
 app.include_router(router)
 app.include_router(search_router)
 app.include_router(flights_router)
+app.include_router(cities_router)
 app.include_router(admin_router)

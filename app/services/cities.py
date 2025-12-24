@@ -55,7 +55,7 @@ class CitiesService:
             if total_cities == 0:
                 return None
 
-            # Get top cities ordered by population (then rank_signal as fallback)
+            # Get top cities ordered by importance (rank_signal) then population
             query = """
                 SELECT
                     id,
@@ -68,8 +68,8 @@ class CitiesService:
                 FROM public.cities
                 WHERE UPPER(country_code) = %s
                 ORDER BY
-                    population DESC NULLS LAST,
                     rank_signal DESC NULLS LAST,
+                    population DESC NULLS LAST,
                     name ASC
                 LIMIT %s
             """
