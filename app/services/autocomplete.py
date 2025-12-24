@@ -46,13 +46,15 @@ class AutocompleteService:
         Search strategy:
         1. Return empty if query < 3 chars
         2. Search in both label AND ref (airport codes like CDG, ORY)
-        3. Priority ordering:
-           - Exact code match (CDG, ORY) - HIGHEST PRIORITY
-           - Exact label match (India)
-           - Label starts with query (Ind...)
-           - Label contains query (...india...)
-        4. Within each priority level: airports > cities > countries
-        5. Finally ordered by rank_signal (population for cities, fixed values for others)
+        3. Priority ordering (from highest to lowest):
+           a) Exact code match (CDG, ORY) - HIGHEST PRIORITY
+           b) Exact label match (France = France)
+              - Within exact matches: countries > cities > airports
+           c) Label starts with query (Franc...)
+              - Within starts-with: countries > cities > airports
+           d) Label contains query (...france...)
+        4. Finally ordered by rank_signal (importance/population)
+        5. Alphabetical order as last resort
         """
 
         # Return empty results if query too short
@@ -94,19 +96,28 @@ class AutocompleteService:
                     (label ILIKE %s OR label ILIKE %s OR ref ILIKE %s)
                     {type_filter}
                 ORDER BY
+                    -- 1. Match exact du code (CDG, ORY, etc.) - priorité absolue
+                    CASE WHEN UPPER(ref) = UPPER(%s) THEN 0 ELSE 1 END,
+                    -- 2. Match exact du label (France = France)
+                    CASE WHEN LOWER(label) = LOWER(%s) THEN 0 ELSE 1 END,
+                    -- 3. Type priority pour match exact: country > city > airport
                     CASE
-                        WHEN UPPER(ref) = UPPER(%s) THEN 0
-                        WHEN LOWER(label) = LOWER(%s) THEN 1
-                        WHEN LOWER(label) LIKE LOWER(%s) THEN 2
-                        WHEN LOWER(label) LIKE LOWER(%s) THEN 3
-                        ELSE 4
+                        WHEN LOWER(label) = LOWER(%s) AND type = 'country' THEN 0
+                        WHEN LOWER(label) = LOWER(%s) AND type = 'city' THEN 1
+                        WHEN LOWER(label) = LOWER(%s) AND type = 'airport' THEN 2
+                        ELSE 3
                     END,
+                    -- 4. Label commence par le terme
+                    CASE WHEN LOWER(label) LIKE LOWER(%s) THEN 0 ELSE 1 END,
+                    -- 5. Type priority pour "commence par": country > city > airport
                     CASE
-                        WHEN type = 'airport' THEN 1
-                        WHEN type = 'city' THEN 2
-                        WHEN type = 'country' THEN 3
+                        WHEN type = 'country' THEN 0
+                        WHEN type = 'city' THEN 1
+                        WHEN type = 'airport' THEN 2
                     END,
+                    -- 6. Importance (rank_signal)
                     rank_signal DESC,
+                    -- 7. Ordre alphabétique
                     label ASC
                 LIMIT %s
             """
@@ -120,10 +131,12 @@ class AutocompleteService:
                 contains,     # OR label ILIKE %s (contient)
                 search_term,  # OR ref ILIKE %s (code exact comme CDG)
                 *query_params,  # Type filters if any
-                search_term,  # ORDER BY CASE WHEN UPPER(ref) = UPPER(%s) (code exact - priorité absolue)
-                search_term,  # ORDER BY CASE WHEN LOWER(label) = LOWER(%s) (label exact)
-                starts_with,  # ORDER BY CASE WHEN... (priorité commence par)
-                contains,     # ORDER BY CASE WHEN... (priorité contient)
+                search_term,  # ORDER BY 1: CASE WHEN UPPER(ref) = UPPER(%s) (code exact - priorité absolue)
+                search_term,  # ORDER BY 2: CASE WHEN LOWER(label) = LOWER(%s) (label exact)
+                search_term,  # ORDER BY 3: country exact match check
+                search_term,  # ORDER BY 3: city exact match check
+                search_term,  # ORDER BY 3: airport exact match check
+                starts_with,  # ORDER BY 4: CASE WHEN LOWER(label) LIKE LOWER(%s) (commence par)
                 limit
             ]
 
