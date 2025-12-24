@@ -112,11 +112,9 @@ class CitiesService:
             TopCitiesResponse if country found, None otherwise
 
         Note:
-            Filters by admin_level to return only actual cities/municipalities (admin_level >= 8).
-            This excludes administrative divisions like:
-            - Departments/Districts (admin_level = 6)
-            - Regions (admin_level = 4)
-            - Countries (admin_level = 2)
+            Uses the search_autocomplete view which filters for real cities only.
+            This excludes administrative divisions like departments, districts, and regions.
+            Cities are ordered by population (largest first).
         """
         # Resolve country identifier to ISO2 code
         country_code = self._resolve_country_code(country_identifier)
@@ -129,13 +127,14 @@ class CitiesService:
         try:
             cursor = conn.cursor()
 
-            # Get total count of real cities (admin_level >= 8 means actual cities/municipalities)
+            # Use search_autocomplete view which already filters for real cities (not administrative divisions)
+            # Get total count of cities from search_autocomplete
             cursor.execute(
                 """
                 SELECT COUNT(*)
-                FROM public.cities
-                WHERE UPPER(country_code) = %s
-                    AND admin_level >= 8
+                FROM search_autocomplete
+                WHERE type = 'city'
+                    AND UPPER(country_code) = %s
                 """,
                 (country_code,)
             )
@@ -153,22 +152,24 @@ class CitiesService:
             else:
                 effective_limit = min(limit, total_cities)
 
-            # Get top cities ordered by population (only actual cities with admin_level >= 8)
+            # Get top cities from search_autocomplete (which filters real cities)
+            # Join with cities table to get full details including population
             query = """
                 SELECT
-                    id,
-                    name,
-                    country_code,
-                    slug,
-                    population,
-                    ST_Y(location::geometry) as lat,
-                    ST_X(location::geometry) as lon
-                FROM public.cities
-                WHERE UPPER(country_code) = %s
-                    AND admin_level >= 8
+                    c.id,
+                    c.name,
+                    c.country_code,
+                    sa.slug,
+                    c.population,
+                    ST_Y(c.location::geometry) as lat,
+                    ST_X(c.location::geometry) as lon
+                FROM search_autocomplete sa
+                INNER JOIN public.cities c ON c.id::text = sa.ref
+                WHERE sa.type = 'city'
+                    AND UPPER(sa.country_code) = %s
                 ORDER BY
-                    population DESC NULLS LAST,
-                    name ASC
+                    c.population DESC NULLS LAST,
+                    c.name ASC
                 LIMIT %s
             """
 
