@@ -55,6 +55,14 @@ class CitiesService:
             if total_cities == 0:
                 return None
 
+            # Adjust limit based on country size
+            # Small countries (<=10 cities): return max 1-2 cities
+            # Larger countries: use requested limit
+            if total_cities <= 10:
+                effective_limit = min(2, total_cities)
+            else:
+                effective_limit = min(limit, total_cities)
+
             # Get top cities ordered by population
             query = """
                 SELECT
@@ -73,7 +81,7 @@ class CitiesService:
                 LIMIT %s
             """
 
-            cursor.execute(query, (country_code, limit))
+            cursor.execute(query, (country_code, effective_limit))
             rows = cursor.fetchall()
 
             cities = []
