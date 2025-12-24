@@ -1,9 +1,13 @@
 """Service for city-related operations."""
 
+import re
+import logging
 from typing import Optional
 from app.db.postgres import PostgresManager
 from app.models.cities import TopCitiesResponse, CityInfo
 from app.core.cache import cache_result
+
+logger = logging.getLogger(__name__)
 
 
 class CitiesService:
@@ -17,35 +21,121 @@ class CitiesService:
         """
         self.postgres_manager = postgres_manager
 
+    def _slugify(self, text: str) -> str:
+        """Convert text to slug format.
+
+        Args:
+            text: Text to slugify (e.g., "United States", "Côte d'Ivoire")
+
+        Returns:
+            Slugified text (e.g., "united-states", "cote-d-ivoire")
+        """
+        # Convert to lowercase
+        text = text.lower().strip()
+        # Remove accents/diacritics (simple approach)
+        text = re.sub(r'[àáâãäå]', 'a', text)
+        text = re.sub(r'[èéêë]', 'e', text)
+        text = re.sub(r'[ìíîï]', 'i', text)
+        text = re.sub(r'[òóôõö]', 'o', text)
+        text = re.sub(r'[ùúûü]', 'u', text)
+        text = re.sub(r'[ýÿ]', 'y', text)
+        text = re.sub(r'[ñ]', 'n', text)
+        text = re.sub(r'[ç]', 'c', text)
+        # Replace spaces and non-alphanumeric with hyphens
+        text = re.sub(r'[^a-z0-9]+', '-', text)
+        # Remove leading/trailing hyphens
+        text = text.strip('-')
+        return text
+
+    def _resolve_country_code(self, country_identifier: str) -> Optional[str]:
+        """Resolve country identifier (code or name) to ISO2 country code.
+
+        Args:
+            country_identifier: ISO2 code (e.g., "FR") or country name (e.g., "France")
+
+        Returns:
+            ISO2 country code (uppercase) or None if not found
+        """
+        identifier = country_identifier.strip()
+
+        # Check if it's already an ISO2 code (2 uppercase letters)
+        if len(identifier) == 2 and identifier.isalpha():
+            return identifier.upper()
+
+        # Otherwise, treat as country name - convert to slug and search
+        slug = self._slugify(identifier)
+        logger.debug(f"Searching for country with slug: '{slug}' from identifier: '{identifier}'")
+
+        conn = self.postgres_manager.get_connection()
+        try:
+            cursor = conn.cursor()
+
+            # Search in search_autocomplete view for country by slug
+            cursor.execute(
+                """
+                SELECT ref
+                FROM search_autocomplete
+                WHERE type = 'country'
+                    AND slug = %s
+                LIMIT 1
+                """,
+                (slug,)
+            )
+
+            result = cursor.fetchone()
+            cursor.close()
+
+            if result:
+                country_code = result[0]
+                logger.info(f"Resolved '{identifier}' → '{country_code}'")
+                return country_code
+
+            logger.warning(f"Could not resolve country identifier: '{identifier}' (slug: '{slug}')")
+            return None
+
+        finally:
+            self.postgres_manager.release_connection(conn)
+
     @cache_result(ttl_seconds=1800)  # Cache for 30 minutes
     def get_top_cities_by_country(
         self,
-        country_code: str,
+        country_identifier: str,
         limit: int = 5
     ) -> Optional[TopCitiesResponse]:
         """Get top cities by population for a given country.
 
         Args:
-            country_code: ISO2 country code (e.g., "FR", "US")
+            country_identifier: ISO2 country code (e.g., "FR") or country name (e.g., "France", "United States")
             limit: Maximum number of cities to return
 
         Returns:
             TopCitiesResponse if country found, None otherwise
+
+        Note:
+            Filters by admin_level to return only actual cities/municipalities (admin_level >= 8).
+            This excludes administrative divisions like:
+            - Departments/Districts (admin_level = 6)
+            - Regions (admin_level = 4)
+            - Countries (admin_level = 2)
         """
+        # Resolve country identifier to ISO2 code
+        country_code = self._resolve_country_code(country_identifier)
+        if not country_code:
+            logger.warning(f"Failed to resolve country: '{country_identifier}'")
+            return None
+
         conn = self.postgres_manager.get_connection()
 
         try:
             cursor = conn.cursor()
 
-            # Normalize country code (uppercase)
-            country_code = country_code.upper().strip()
-
-            # Get total count of cities in country
+            # Get total count of real cities (admin_level >= 8 means actual cities/municipalities)
             cursor.execute(
                 """
                 SELECT COUNT(*)
                 FROM public.cities
                 WHERE UPPER(country_code) = %s
+                    AND admin_level >= 8
                 """,
                 (country_code,)
             )
@@ -63,7 +153,7 @@ class CitiesService:
             else:
                 effective_limit = min(limit, total_cities)
 
-            # Get top cities ordered by population
+            # Get top cities ordered by population (only actual cities with admin_level >= 8)
             query = """
                 SELECT
                     id,
@@ -75,6 +165,7 @@ class CitiesService:
                     ST_X(location::geometry) as lon
                 FROM public.cities
                 WHERE UPPER(country_code) = %s
+                    AND admin_level >= 8
                 ORDER BY
                     population DESC NULLS LAST,
                     name ASC
