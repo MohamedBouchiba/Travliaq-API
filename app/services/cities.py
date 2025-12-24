@@ -55,7 +55,7 @@ class CitiesService:
             if total_cities == 0:
                 return None
 
-            # Get top cities ordered by importance (rank_signal) then population
+            # Get top cities ordered by population
             query = """
                 SELECT
                     id,
@@ -68,7 +68,6 @@ class CitiesService:
                 FROM public.cities
                 WHERE UPPER(country_code) = %s
                 ORDER BY
-                    rank_signal DESC NULLS LAST,
                     population DESC NULLS LAST,
                     name ASC
                 LIMIT %s
@@ -101,4 +100,4 @@ class CitiesService:
             )
 
         finally:
-            self.postgres_manager.return_connection(conn)
+            self.postgres_manager.release_connection(conn)
