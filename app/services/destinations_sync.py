@@ -205,6 +205,7 @@ class DestinationsSyncService:
                 }
 
         # Build document
+        now = datetime.utcnow()
         doc = {
             "destination_id": dest_id,
             "name": viator_dest.get("name", ""),
@@ -216,7 +217,8 @@ class DestinationsSyncService:
             "location": location,
             "iata_codes": viator_dest.get("iataCodes", []),
             "metadata": {
-                "synced_at": datetime.utcnow(),
+                "synced_at": now,
+                "last_synced": now,
                 "source": "viator_api"
             }
         }

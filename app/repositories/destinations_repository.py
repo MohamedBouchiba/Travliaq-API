@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 import logging
-from datetime import datetime
 from typing import Optional
 from motor.motor_asyncio import AsyncIOMotorCollection
 
@@ -21,16 +20,11 @@ class DestinationsRepository:
 
         Args:
             destination_id: Viator destination ID (unique identifier)
-            destination_data: Destination data to store
+            destination_data: Destination data to store (must include metadata.last_synced)
         """
         result = await self.collection.update_one(
             {"destination_id": destination_id},
-            {
-                "$set": {
-                    **destination_data,
-                    "metadata.last_synced": datetime.utcnow()
-                }
-            },
+            {"$set": destination_data},
             upsert=True
         )
 
