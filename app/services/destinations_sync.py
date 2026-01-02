@@ -157,8 +157,12 @@ class DestinationsSyncService:
         self,
         destinations: List[Dict[str, Any]]
     ) -> Dict[str, Dict[str, Any]]:
-        """Build a lookup dictionary of destinations by ref."""
-        return {dest["ref"]: dest for dest in destinations if "ref" in dest}
+        """Build a lookup dictionary of destinations by destinationId."""
+        return {
+            str(dest["destinationId"]): dest
+            for dest in destinations
+            if "destinationId" in dest
+        }
 
     def _transform_destination(
         self,
@@ -175,27 +179,30 @@ class DestinationsSyncService:
         Returns:
             Destination document for MongoDB
         """
-        dest_id = viator_dest["ref"]
-        dest_type = viator_dest.get("destinationType", "UNKNOWN")
-        parent_ref = viator_dest.get("parentRef")
+        dest_id = str(viator_dest["destinationId"])
+        dest_type = viator_dest.get("type", "UNKNOWN")
+        parent_id = viator_dest.get("parentDestinationId")
+        parent_id_str = str(parent_id) if parent_id else None
 
         # Determine country code
         country_code = self._determine_country_code(
             dest_type,
             dest_id,
-            parent_ref,
+            parent_id_str,
             parent_lookup
         )
 
         # Extract coordinates if available
         location = None
-        lat = viator_dest.get("latitude")
-        lon = viator_dest.get("longitude")
-        if lat is not None and lon is not None:
-            location = {
-                "type": "Point",
-                "coordinates": [float(lon), float(lat)]
-            }
+        center = viator_dest.get("center")
+        if center:
+            lat = center.get("latitude")
+            lon = center.get("longitude")
+            if lat is not None and lon is not None:
+                location = {
+                    "type": "Point",
+                    "coordinates": [float(lon), float(lat)]
+                }
 
         # Build document
         doc = {
@@ -205,9 +212,9 @@ class DestinationsSyncService:
             "type": self.DESTINATION_TYPE_MAPPING.get(dest_type, "unknown"),
             "viator_type": dest_type,
             "country_code": country_code,
-            "parent_id": parent_ref,
-            "timezone": viator_dest.get("timeZone"),
+            "parent_id": parent_id_str,
             "location": location,
+            "iata_codes": viator_dest.get("iataCodes", []),
             "metadata": {
                 "synced_at": datetime.utcnow(),
                 "source": "viator_api"
@@ -215,8 +222,8 @@ class DestinationsSyncService:
         }
 
         # Add parent name if available
-        if parent_ref and parent_ref in parent_lookup:
-            parent = parent_lookup[parent_ref]
+        if parent_id_str and parent_id_str in parent_lookup:
+            parent = parent_lookup[parent_id_str]
             doc["country_name"] = parent.get("name")
 
         return doc
@@ -253,8 +260,9 @@ class DestinationsSyncService:
             # Recursively check parent's parent
             if parent_ref in parent_lookup:
                 parent = parent_lookup[parent_ref]
-                parent_parent_ref = parent.get("parentRef")
-                if parent_parent_ref in self.COUNTRY_CODES:
+                parent_parent_id = parent.get("parentDestinationId")
+                parent_parent_ref = str(parent_parent_id) if parent_parent_id else None
+                if parent_parent_ref and parent_parent_ref in self.COUNTRY_CODES:
                     return self.COUNTRY_CODES[parent_parent_ref]
 
         return None
