@@ -130,21 +130,21 @@ class ActivitiesService:
             )
         )
 
-    async def _resolve_location(self, location: dict) -> tuple[Optional[str], LocationResolution]:
+    async def _resolve_location(self, location) -> tuple[Optional[str], LocationResolution]:
         """Resolve location input to Viator destination ID."""
         # Option 1: Direct destination_id
-        if location.get("destination_id"):
-            return location["destination_id"], LocationResolution(
+        if location.destination_id:
+            return location.destination_id, LocationResolution(
                 matched_city=None,
-                destination_id=location["destination_id"],
+                destination_id=location.destination_id,
                 coordinates=None
             )
 
         # Option 2: City name
-        if location.get("city"):
+        if location.city:
             result = await self.location_resolver.resolve_city(
-                location["city"],
-                location.get("country_code")
+                location.city,
+                location.country_code
             )
             if result:
                 dest_id, matched_city, score = result
@@ -156,19 +156,19 @@ class ActivitiesService:
                 )
 
         # Option 3: Geo coordinates
-        if location.get("geo"):
-            geo = location["geo"]
+        if location.geo:
+            geo = location.geo
             result = await self.location_resolver.resolve_geo(
-                geo["lat"],
-                geo["lon"],
-                geo.get("radius_km", 50)
+                geo.lat,
+                geo.lon,
+                geo.radius_km
             )
             if result:
                 dest_id, city_name, distance_km = result
                 return dest_id, LocationResolution(
                     matched_city=city_name,
                     destination_id=dest_id,
-                    coordinates={"lat": geo["lat"], "lon": geo["lon"]},
+                    coordinates={"lat": geo.lat, "lon": geo.lon},
                     distance_km=distance_km
                 )
 

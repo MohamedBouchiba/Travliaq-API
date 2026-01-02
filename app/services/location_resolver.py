@@ -8,6 +8,21 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 
 logger = logging.getLogger(__name__)
 
+# Fallback hardcoded destination IDs for common cities
+# Used when destinations collection is not yet populated
+FALLBACK_DESTINATIONS = {
+    ("paris", "FR"): ("684", "Paris"),
+    ("london", "GB"): ("77", "London"),
+    ("rome", "IT"): ("179", "Rome"),
+    ("barcelona", "ES"): ("706", "Barcelona"),
+    ("madrid", "ES"): ("667", "Madrid"),
+    ("new york", "US"): ("62", "New York City"),
+    ("amsterdam", "NL"): ("57", "Amsterdam"),
+    ("venice", "IT"): ("191", "Venice"),
+    ("florence", "IT"): ("178", "Florence"),
+    ("dubai", "AE"): ("24679", "Dubai"),
+}
+
 
 class LocationResolver:
     """Resolve city names and geo coordinates to Viator destination IDs."""
@@ -53,7 +68,16 @@ class LocationResolver:
         cities = await cursor.to_list(length=1000)
 
         if not cities:
-            logger.warning(f"No cities found for query: {query}")
+            logger.warning(f"No cities found in database for query: {query}")
+            # Try fallback for common cities
+            if country_code:
+                fallback_key = (city.lower(), country_code.upper())
+                if fallback_key in FALLBACK_DESTINATIONS:
+                    dest_id, dest_name = FALLBACK_DESTINATIONS[fallback_key]
+                    logger.info(f"Using fallback destination: {dest_name} (ID: {dest_id})")
+                    result = (dest_id, dest_name, 100.0)
+                    self._cache[cache_key] = result
+                    return result
             return None
 
         # Fuzzy matching
