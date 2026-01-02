@@ -17,25 +17,30 @@ class ActivitiesRepository:
 
     async def upsert_activity(self, product_code: str, activity_data: dict):
         """
-        Upsert activity with last_updated tracking.
+        Upsert activity with metadata tracking.
 
         Args:
             product_code: Viator product code (unique identifier)
-            activity_data: Activity data to store
+            activity_data: Activity data to store (should NOT include metadata field)
         """
+        now = datetime.utcnow()
+
+        # Remove metadata from activity_data if it exists (to prevent conflicts)
+        activity_data_clean = {k: v for k, v in activity_data.items() if k != "metadata"}
+
         result = await self.collection.update_one(
             {"product_code": product_code},
             {
-                "$set": {
-                    **activity_data,
-                    "metadata.last_updated": datetime.utcnow()
-                },
+                "$set": activity_data_clean,
                 "$setOnInsert": {
-                    "metadata.first_seen": datetime.utcnow(),
-                    "metadata.fetch_count": 0
+                    "metadata.first_seen": now,
+                    "metadata.fetch_count": 0  # Start at 0, will be incremented to 1
+                },
+                "$currentDate": {
+                    "metadata.last_updated": True
                 },
                 "$inc": {
-                    "metadata.fetch_count": 1
+                    "metadata.fetch_count": 1  # Increment (0->1 on insert, N->N+1 on update)
                 }
             },
             upsert=True

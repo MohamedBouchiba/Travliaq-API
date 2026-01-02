@@ -212,6 +212,24 @@ class DestinationsSyncService:
             # Other common variations
             "Holland": "NL",
             "The Netherlands": "NL",
+
+            # Territories and special cases
+            "Palestinian Territories": "PS",
+            "Palestine": "PS",
+            "St Maarten": "SX",
+            "Sint Maarten": "SX",
+            "Bonaire": "BQ",  # Bonaire, Sint Eustatius and Saba
+            "Kosovo": "XK",  # User-assigned code (not official ISO but widely used)
+            "Brunei": "BN",
+            "Brunei Darussalam": "BN",
+            "Democratic Republic of Congo": "CD",
+            "Congo (DRC)": "CD",
+            "DR Congo": "CD",
+            "Eswatini (Swaziland)": "SZ",
+            "Eswatini": "SZ",
+            "Swaziland": "SZ",
+            "East Timor": "TL",
+            "Timor-Leste": "TL",
         }
 
         # Check common variations first (case insensitive)
