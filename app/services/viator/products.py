@@ -112,3 +112,27 @@ class ViatorProductsService:
         logger.info(f"Fetching product details for {product_code}")
 
         return await self.client.get(f"/products/{product_code}", language=language)
+
+    async def get_bulk_products(self, product_codes: list[str], language: str = "en") -> list[dict]:
+        """
+        Get bulk product details.
+
+        Args:
+            product_codes: List of Viator product codes
+            language: Language for translations
+
+        Returns:
+            List of product details
+        """
+        if not product_codes:
+            return []
+
+        logger.info(f"Fetching bulk product details for {len(product_codes)} products")
+
+        response = await self.client.post(
+            "/products/bulk",
+            json_data={"productCodes": product_codes},
+            language=language
+        )
+        
+        return response.get("products", [])

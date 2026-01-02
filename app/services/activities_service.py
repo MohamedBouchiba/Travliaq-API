@@ -101,6 +101,9 @@ class ActivitiesService:
             ViatorMapper.map_product_summary(product)
             for product in viator_response.get("products", [])
         ]
+        
+        # 4.5 Enrich with locations (New Step)
+        await self._enrich_activities_with_locations(activities, language=request.language)
 
         # 5. Persist in MongoDB (async, non-blocking)
         await self._persist_activities(activities)
@@ -257,6 +260,80 @@ class ActivitiesService:
                 await self.repo.upsert_activity(activity["id"], activity)
             except Exception as e:
                 logger.error(f"Error persisting activity {activity['id']}: {e}")
+
+    async def _enrich_activities_with_locations(self, activities: list[dict], language: str = "en"):
+        """
+        Enrich activities with location coordinates using Viator bulk endpoints.
+
+        Flow:
+        1. Extract product codes from activities lacking coordinates
+        2. Bulk fetch product details to get location references (logistics/itinerary)
+        3. Bulk fetch location details to get lat/lon
+        4. Match back to activities
+        """
+        if not activities:
+            return
+
+        # Filter activities that need location enrichment (missing coordinates)
+        candidates = [
+            a for a in activities 
+            if not a.get("location", {}).get("coordinates")
+        ]
+        
+        if not candidates:
+            return
+
+        product_codes = [a["id"] for a in candidates]
+        
+        try:
+            # Step 1: Bulk fetch product details to get location refs
+            products_details = await self.viator_products.get_bulk_products(product_codes, language=language)
+            
+            # Map product_code -> location_refs
+            product_refs_map = {}
+            all_refs = set()
+            
+            for prod in products_details:
+                refs = ViatorMapper.extract_location_refs(prod)
+                if refs:
+                    product_refs_map[prod["productCode"]] = refs
+                    all_refs.update(refs)
+            
+            if not all_refs:
+                return
+
+            # Step 2: Bulk fetch location details to get coordinates
+            locations_details = await self.viator_client.get_bulk_locations(list(all_refs))
+            
+            # Map ref -> {lat, lon}
+            ref_coords_map = {}
+            for loc in locations_details:
+                center = loc.get("center")
+                if center:
+                    ref_coords_map[loc["reference"]] = {
+                        "lat": center.get("latitude"),
+                        "lon": center.get("longitude")
+                    }
+            
+            # Step 3: Assign coordinates to activities
+            # We take the first valid coordinate found for a product's refs
+            for activity in candidates:
+                p_code = activity["id"]
+                refs = product_refs_map.get(p_code, [])
+                
+                for ref in refs:
+                    coords = ref_coords_map.get(ref)
+                    if coords:
+                        # Found a valid coordinate! Update activity.
+                        # Note: We prioritize Start Points which are usually first in extract_location_refs
+                        activity["location"]["coordinates"] = coords
+                        logger.info(f"Enriched activity {p_code} with coordinates: {coords}")
+                        break
+                        
+        except Exception as e:
+            logger.error(f"Error enriching activities with locations: {e}")
+            # Don't fail the search if enrichment fails
+            pass
 
     def _build_cache_key(self, destination_id: str, request: ActivitySearchRequest) -> str:
         """Build unique cache key for search request."""

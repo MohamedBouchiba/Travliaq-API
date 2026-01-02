@@ -136,3 +136,25 @@ class ViatorClient:
     async def post(self, endpoint: str, json_data: dict, language: str = "en") -> dict:
         """Make POST request to Viator API."""
         return await self.request("POST", endpoint, json_data=json_data, language=language)
+
+    async def get_bulk_locations(self, location_refs: list[str]) -> list[dict]:
+        """
+        Get bulk location details.
+
+        Args:
+            location_refs: List of location reference codes
+
+        Returns:
+            List of location objects
+        """
+        if not location_refs:
+            return []
+
+        logger.info(f"Fetching bulk locations for {len(location_refs)} refs")
+        
+        response = await self.post(
+            "/locations/bulk",
+            json_data={"locations": location_refs}
+        )
+        
+        return response.get("locations", [])

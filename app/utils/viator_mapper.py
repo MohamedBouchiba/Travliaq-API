@@ -139,3 +139,52 @@ class ViatorMapper:
 
         # Return first 5 tags as strings to avoid too many categories
         return [f"tag_{tag_id}" for tag_id in tags[:5]]
+
+    @staticmethod
+    def extract_location_refs(product: dict) -> list[str]:
+        """
+        Extract location reference codes from product details.
+        
+        Look for:
+        - logistics.start.location.ref
+        - logistics.end.location.ref
+        - itinerary.pointsOfInterest[].location.ref
+        
+        Args:
+            product: Product details from Viator API
+            
+        Returns:
+            List of location reference codes
+        """
+        refs = set()
+        
+        # Check logistics start/end
+        logistics = product.get("logistics", {})
+        
+        # Start points
+        for start_point in logistics.get("start", []):
+            ref = ViatorMapper._get_location_ref(start_point)
+            if ref:
+                refs.add(ref)
+                
+        # End points
+        for end_point in logistics.get("end", []):
+            ref = ViatorMapper._get_location_ref(end_point)
+            if ref:
+                refs.add(ref)
+                
+        # Check itinerary points of interest
+        itinerary = product.get("itinerary", {})
+        for day in itinerary.get("days", []):
+            for item in day.get("items", []):
+                point_of_interest = item.get("pointOfInterest", {})
+                ref = ViatorMapper._get_location_ref(point_of_interest)
+                if ref:
+                    refs.add(ref)
+                    
+        return list(refs)
+
+    @staticmethod
+    def _get_location_ref(obj: dict) -> Optional[str]:
+        """Helper to safely extract location ref from nested object."""
+        return obj.get("location", {}).get("ref")
