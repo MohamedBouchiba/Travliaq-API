@@ -230,6 +230,16 @@ class DestinationsSyncService:
             "Swaziland": "SZ",
             "East Timor": "TL",
             "Timor-Leste": "TL",
+
+            # Islands and territories
+            "Channel Islands": "GB",  # British Crown dependency (Jersey, Guernsey)
+            "Réunion Island": "RE",
+            "Réunion": "RE",
+            "Reunion": "RE",
+            "Reunion Island": "RE",
+            "US Virgin Islands": "VI",
+            "U.S. Virgin Islands": "VI",
+            "Virgin Islands": "VI",
         }
 
         # Check common variations first (case insensitive)
@@ -273,12 +283,14 @@ class DestinationsSyncService:
         all_countries = list(pycountry.countries)
         country_names = [c.name for c in all_countries]
 
-        # Also include common names and official names
+        # Also include common names and official names (using getattr to avoid warnings)
         for country in all_countries:
-            if hasattr(country, 'common_name'):
-                country_names.append(country.common_name)
-            if hasattr(country, 'official_name'):
-                country_names.append(country.official_name)
+            common_name = getattr(country, 'common_name', None)
+            if common_name:
+                country_names.append(common_name)
+            official_name = getattr(country, 'official_name', None)
+            if official_name:
+                country_names.append(official_name)
 
         # Fuzzy match with threshold of 80
         match = process.extractOne(
@@ -295,8 +307,8 @@ class DestinationsSyncService:
             # Find the country object with this name
             for country in all_countries:
                 if country.name == matched_name or \
-                   (hasattr(country, 'common_name') and country.common_name == matched_name) or \
-                   (hasattr(country, 'official_name') and country.official_name == matched_name):
+                   getattr(country, 'common_name', None) == matched_name or \
+                   getattr(country, 'official_name', None) == matched_name:
                     code = country.alpha_2
                     self._country_name_to_code_cache[country_name] = code
                     return code
