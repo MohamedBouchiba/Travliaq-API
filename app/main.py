@@ -110,37 +110,46 @@ async def startup_event() -> None:
         default_detail_types=settings.default_detail_types,
     )
 
-    # Initialize Viator API services
-    app.state.viator_client = ViatorClient(
-        api_key=settings.viator_api_key,
-        base_url=settings.viator_base_url,
-        http_client=app.state.http_client
-    )
+    # Initialize Viator API services (only if API keys are configured)
+    if settings.viator_enabled:
+        app.state.viator_client = ViatorClient(
+            api_key=settings.viator_api_key,
+            base_url=settings.viator_base_url,
+            http_client=app.state.http_client
+        )
 
-    app.state.viator_products = ViatorProductsService(app.state.viator_client)
+        app.state.viator_products = ViatorProductsService(app.state.viator_client)
 
-    # Initialize activities repository
-    activities_collection = app.state.mongo_manager.db[settings.mongodb_collection_activities]
-    app.state.activities_repo = ActivitiesRepository(activities_collection)
-    await app.state.activities_repo.create_indexes()
+        # Initialize activities repository
+        activities_collection = app.state.mongo_manager.db[settings.mongodb_collection_activities]
+        app.state.activities_repo = ActivitiesRepository(activities_collection)
+        await app.state.activities_repo.create_indexes()
 
-    # Initialize destinations repository
-    destinations_collection = app.state.mongo_manager.db[settings.mongodb_collection_destinations]
-    app.state.destinations_repo = DestinationsRepository(destinations_collection)
-    await app.state.destinations_repo.create_indexes()
+        # Initialize destinations repository
+        destinations_collection = app.state.mongo_manager.db[settings.mongodb_collection_destinations]
+        app.state.destinations_repo = DestinationsRepository(destinations_collection)
+        await app.state.destinations_repo.create_indexes()
 
-    # Initialize location resolver
-    app.state.location_resolver = LocationResolver(destinations_collection)
+        # Initialize location resolver
+        app.state.location_resolver = LocationResolver(destinations_collection)
 
-    # Initialize activities service
-    app.state.activities_service = ActivitiesService(
-        viator_client=app.state.viator_client,
-        viator_products=app.state.viator_products,
-        redis_cache=app.state.redis_cache,
-        activities_repo=app.state.activities_repo,
-        location_resolver=app.state.location_resolver,
-        cache_ttl=settings.cache_ttl_activities_search
-    )
+        # Initialize activities service
+        app.state.activities_service = ActivitiesService(
+            viator_client=app.state.viator_client,
+            viator_products=app.state.viator_products,
+            redis_cache=app.state.redis_cache,
+            activities_repo=app.state.activities_repo,
+            location_resolver=app.state.location_resolver,
+            cache_ttl=settings.cache_ttl_activities_search
+        )
+    else:
+        # Set to None if not configured
+        app.state.viator_client = None
+        app.state.viator_products = None
+        app.state.activities_repo = None
+        app.state.destinations_repo = None
+        app.state.location_resolver = None
+        app.state.activities_service = None
 
 
 @app.on_event("shutdown")
@@ -153,8 +162,9 @@ async def shutdown_event() -> None:
     if app.state.postgres_manager:
         app.state.postgres_manager.close_all()
 
-    # Close Viator client
-    await app.state.viator_client.close()
+    # Close Viator client if it was initialized
+    if app.state.viator_client:
+        await app.state.viator_client.close()
 
 
 app.include_router(router)

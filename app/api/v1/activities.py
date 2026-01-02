@@ -17,7 +17,20 @@ router = APIRouter(prefix="/activities", tags=["Activities"])
 
 def get_activities_service(request: Request):
     """Dependency to get activities service from app state."""
-    return request.app.state.activities_service
+    service = request.app.state.activities_service
+    if service is None:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "SERVICE_UNAVAILABLE",
+                    "message": "Viator integration is not configured. Please set VIATOR_API_KEY_DEV or VIATOR_API_KEY_PROD in environment variables.",
+                    "details": None
+                }
+            }
+        )
+    return service
 
 
 @router.post(

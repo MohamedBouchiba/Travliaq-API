@@ -32,16 +32,23 @@ class Settings(BaseSettings):
     google_flight_api_key: str = Field(..., alias="GOOGLE_FLIGHT_API")
     translation_service_url: str = Field("https://travliaq-transalte-production.up.railway.app", alias="TRANSLATION_SERVICE_URL")
 
-    # Viator API
-    viator_api_key_dev: str = Field(..., alias="VIATOR_API_KEY_DEV")
-    viator_api_key_prod: str = Field(..., alias="VIATOR_API_KEY_PROD")
+    # Viator API (optional)
+    viator_api_key_dev: str = Field("", alias="VIATOR_API_KEY_DEV")
+    viator_api_key_prod: str = Field("", alias="VIATOR_API_KEY_PROD")
     viator_env: str = Field("dev", alias="VIATOR_ENV")
     viator_base_url: str = Field("https://api.viator.com", alias="VIATOR_BASE_URL")
 
     @property
     def viator_api_key(self) -> str:
         """Get Viator API key based on environment."""
-        return self.viator_api_key_prod if self.viator_env == "prod" else self.viator_api_key_dev
+        if self.viator_env == "prod":
+            return self.viator_api_key_prod
+        return self.viator_api_key_dev
+
+    @property
+    def viator_enabled(self) -> bool:
+        """Check if Viator integration is enabled."""
+        return bool(self.viator_api_key)
 
     # Upstash Redis (for flights cache)
     upstash_redis_rest_url: str = Field(..., alias="UPSTASH_REDIS_REST_URL")
