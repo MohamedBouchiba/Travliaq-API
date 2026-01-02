@@ -108,13 +108,12 @@ class DestinationsSyncService:
                     )
 
                     # Upsert to MongoDB
-                    result = await self.repo.upsert_destination(
+                    await self.repo.upsert_destination(
                         destination_id=destination_doc["destination_id"],
                         destination_data=destination_doc
                     )
 
-                    # Note: MongoDB update_one doesn't tell us if it was insert/update
-                    # We'll just count as updated for now
+                    # Count as updated (upsert could be insert or update)
                     stats["updated"] += 1
                     stats["by_type"][dest_type]["updated"] += 1
 
@@ -157,8 +156,15 @@ class DestinationsSyncService:
         """
         Convert country name to ISO 3166-1 alpha-2 code using pycountry with fuzzy matching.
 
+        Handles common variations and subdivisions:
+        - USA/US → United States
+        - UK/Britain → United Kingdom
+        - England/Scotland/Wales/Northern Ireland → United Kingdom
+        - Turkey → Türkiye (new official name)
+        - And many more...
+
         Args:
-            country_name: Name of the country (e.g., "France", "United States")
+            country_name: Name of the country (e.g., "France", "United States", "USA")
 
         Returns:
             ISO alpha-2 country code (e.g., "FR", "US") or None if not found
@@ -170,9 +176,74 @@ class DestinationsSyncService:
         if country_name in self._country_name_to_code_cache:
             return self._country_name_to_code_cache[country_name]
 
-        # Try exact match first (case insensitive)
+        # Common name variations that pycountry doesn't handle well
+        # This is NOT hardcoding countries - it's mapping common names to ISO names
+        common_variations = {
+            # USA variations
+            "USA": "US",
+            "U.S.A": "US",
+            "U.S.A.": "US",
+            "US": "US",
+            "U.S": "US",
+            "United States": "US",
+            "United States of America": "US",
+
+            # UK variations and subdivisions
+            "UK": "GB",
+            "U.K": "GB",
+            "U.K.": "GB",
+            "Britain": "GB",
+            "Great Britain": "GB",
+            "England": "GB",
+            "Scotland": "GB",
+            "Wales": "GB",
+            "Northern Ireland": "GB",
+
+            # Turkey (new name)
+            "Turkey": "TR",
+            "Türkiye": "TR",
+
+            # UAE variations
+            "UAE": "AE",
+            "U.A.E": "AE",
+            "U.A.E.": "AE",
+            "United Arab Emirates": "AE",
+
+            # Other common variations
+            "Holland": "NL",
+            "The Netherlands": "NL",
+        }
+
+        # Check common variations first (case insensitive)
+        for variation, code in common_variations.items():
+            if country_name.upper() == variation.upper():
+                self._country_name_to_code_cache[country_name] = code
+                logger.debug(f"Mapped common variation '{country_name}' → {code}")
+                return code
+
+        # Try exact match with pycountry (case insensitive)
         try:
             country = pycountry.countries.get(name=country_name)
+            if country:
+                code = country.alpha_2
+                self._country_name_to_code_cache[country_name] = code
+                return code
+        except (KeyError, AttributeError):
+            pass
+
+        # Try alpha_2 code lookup (in case input is already a code)
+        try:
+            country = pycountry.countries.get(alpha_2=country_name.upper())
+            if country:
+                code = country.alpha_2
+                self._country_name_to_code_cache[country_name] = code
+                return code
+        except (KeyError, AttributeError):
+            pass
+
+        # Try alpha_3 code lookup
+        try:
+            country = pycountry.countries.get(alpha_3=country_name.upper())
             if country:
                 code = country.alpha_2
                 self._country_name_to_code_cache[country_name] = code
@@ -184,7 +255,7 @@ class DestinationsSyncService:
         all_countries = list(pycountry.countries)
         country_names = [c.name for c in all_countries]
 
-        # Also include common names (like "United States" instead of "United States of America")
+        # Also include common names and official names
         for country in all_countries:
             if hasattr(country, 'common_name'):
                 country_names.append(country.common_name)
