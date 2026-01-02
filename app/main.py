@@ -121,12 +121,13 @@ async def startup_event() -> None:
         app.state.viator_products = ViatorProductsService(app.state.viator_client)
 
         # Initialize activities repository
-        activities_collection = app.state.mongo_manager.db[settings.mongodb_collection_activities]
+        mongo_db = app.state.mongo_manager.client[settings.mongodb_db]
+        activities_collection = mongo_db[settings.mongodb_collection_activities]
         app.state.activities_repo = ActivitiesRepository(activities_collection)
         await app.state.activities_repo.create_indexes()
 
         # Initialize destinations repository
-        destinations_collection = app.state.mongo_manager.db[settings.mongodb_collection_destinations]
+        destinations_collection = mongo_db[settings.mongodb_collection_destinations]
         app.state.destinations_repo = DestinationsRepository(destinations_collection)
         await app.state.destinations_repo.create_indexes()
 
