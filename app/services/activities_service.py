@@ -286,8 +286,11 @@ class ActivitiesService:
         product_codes = [a["id"] for a in candidates]
         
         try:
+            logger.info(f"[ENRICH] Attempting to enrich {len(candidates)} activities")
+            
             # Step 1: Bulk fetch product details to get location refs
             products_details = await self.viator_products.get_bulk_products(product_codes, language=language)
+            logger.info(f"[ENRICH] Fetched {len(products_details)} product details")
             
             # Map product_code -> location_refs
             product_refs_map = {}
@@ -298,12 +301,16 @@ class ActivitiesService:
                 if refs:
                     product_refs_map[prod["productCode"]] = refs
                     all_refs.update(refs)
+                else:
+                    logger.debug(f"[ENRICH] No refs found for product {prod.get('productCode')}")
             
+            logger.info(f"[ENRICH] Found {len(all_refs)} unique location refs")
             if not all_refs:
                 return
 
             # Step 2: Bulk fetch location details to get coordinates
             locations_details = await self.viator_client.get_bulk_locations(list(all_refs))
+            logger.info(f"[ENRICH] Fetched {len(locations_details)} location details")
             
             # Map ref -> {lat, lon}
             ref_coords_map = {}
@@ -315,7 +322,10 @@ class ActivitiesService:
                         "lon": center.get("longitude")
                     }
             
+            logger.info(f"[ENRICH] Mapped {len(ref_coords_map)} locations to coordinates")
+            
             # Step 3: Assign coordinates to activities
+            enriched_count = 0
             # We take the first valid coordinate found for a product's refs
             for activity in candidates:
                 p_code = activity["id"]
@@ -328,10 +338,13 @@ class ActivitiesService:
                         # Note: We prioritize Start Points which are usually first in extract_location_refs
                         activity["location"]["coordinates"] = coords
                         logger.info(f"Enriched activity {p_code} with coordinates: {coords}")
+                        enriched_count += 1
                         break
+            
+            logger.info(f"[ENRICH] Total enriched: {enriched_count}/{len(candidates)}")
                         
         except Exception as e:
-            logger.error(f"Error enriching activities with locations: {e}")
+            logger.error(f"Error enriching activities with locations: {e}", exc_info=True)
             # Don't fail the search if enrichment fails
             pass
 
