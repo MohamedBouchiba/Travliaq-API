@@ -76,6 +76,13 @@ class ActivitiesRepository:
         """Create MongoDB indexes for activities collection."""
         logger.info("Creating indexes for activities collection")
 
+        # Drop old location index if it exists (migration fix)
+        try:
+            await self.collection.drop_index("location_2dsphere")
+            logger.info("Dropped old location_2dsphere index")
+        except Exception as e:
+            logger.debug(f"No old location_2dsphere index to drop: {e}")
+
         # Product code (unique)
         await self.collection.create_index("product_code", unique=True)
 
@@ -91,8 +98,8 @@ class ActivitiesRepository:
         # Rating
         await self.collection.create_index([("rating.average", -1)])
 
-        # Geospatial
-        await self.collection.create_index([("location", "2dsphere")])
+        # Geospatial (only if coordinates are present)
+        await self.collection.create_index([("location.coordinates", "2dsphere")], sparse=True)
 
         # Last updated
         await self.collection.create_index("metadata.last_updated")
