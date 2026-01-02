@@ -27,8 +27,10 @@ from app.services.translation import TranslationClient
 from app.services.wikidata import WikidataClient
 from app.services.viator.client import ViatorClient
 from app.services.viator.products import ViatorProductsService
+from app.services.viator.destinations import ViatorDestinationsService
 from app.services.activities_service import ActivitiesService
 from app.services.location_resolver import LocationResolver
+from app.services.destinations_sync import DestinationsSyncService
 from app.repositories.activities_repository import ActivitiesRepository
 from app.repositories.destinations_repository import DestinationsRepository
 
@@ -119,6 +121,7 @@ async def startup_event() -> None:
         )
 
         app.state.viator_products = ViatorProductsService(app.state.viator_client)
+        app.state.viator_destinations_service = ViatorDestinationsService(app.state.viator_client)
 
         # Initialize activities repository
         mongo_db = app.state.mongo_manager.client[settings.mongodb_db]
@@ -130,6 +133,12 @@ async def startup_event() -> None:
         destinations_collection = mongo_db[settings.mongodb_collection_destinations]
         app.state.destinations_repo = DestinationsRepository(destinations_collection)
         await app.state.destinations_repo.create_indexes()
+
+        # Initialize destinations sync service
+        app.state.destinations_sync_service = DestinationsSyncService(
+            viator_destinations=app.state.viator_destinations_service,
+            destinations_repo=app.state.destinations_repo
+        )
 
         # Initialize location resolver
         app.state.location_resolver = LocationResolver(destinations_collection)
@@ -147,8 +156,10 @@ async def startup_event() -> None:
         # Set to None if not configured
         app.state.viator_client = None
         app.state.viator_products = None
+        app.state.viator_destinations_service = None
         app.state.activities_repo = None
         app.state.destinations_repo = None
+        app.state.destinations_sync_service = None
         app.state.location_resolver = None
         app.state.activities_service = None
 
