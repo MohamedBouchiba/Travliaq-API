@@ -1,7 +1,7 @@
 """Pydantic models for activities API."""
 
 from __future__ import annotations
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, ConfigDict
 from typing import Optional, List
 from datetime import date
 from enum import Enum
@@ -37,10 +37,12 @@ class GeoInput(BaseModel):
 
 class LocationInput(BaseModel):
     """Location input - accepts city, destination_id, or geo."""
+    model_config = ConfigDict(populate_by_name=True)
+
     city: Optional[str] = Field(None, min_length=2)
     country_code: Optional[str] = Field(None, min_length=2, max_length=2)
     destination_id: Optional[str] = None
-    geo: Optional[GeoInput] = None
+    geo: Optional[GeoInput] = Field(None, alias="coordinates")
 
     @validator("country_code")
     def uppercase_country_code(cls, v):
