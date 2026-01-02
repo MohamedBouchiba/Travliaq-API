@@ -4,6 +4,8 @@ from __future__ import annotations
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+import pycountry
+from rapidfuzz import fuzz, process
 
 from app.services.viator.destinations import ViatorDestinationsService
 from app.repositories.destinations_repository import DestinationsRepository
@@ -24,20 +26,6 @@ class DestinationsSyncService:
         "ATTRACTION": "attraction"
     }
 
-    # Country code mapping (ISO 3166-1 alpha-2)
-    # This maps Viator parent refs to country codes
-    # You can expand this as needed
-    COUNTRY_CODES = {
-        "79": "FR",   # France
-        "184": "GB",  # United Kingdom
-        "105": "IT",  # Italy
-        "209": "ES",  # Spain
-        "244": "US",  # United States
-        "94": "NL",   # Netherlands
-        "241": "AE",  # UAE
-        # Add more as discovered during sync
-    }
-
     def __init__(
         self,
         viator_destinations: ViatorDestinationsService,
@@ -52,6 +40,7 @@ class DestinationsSyncService:
         """
         self.viator = viator_destinations
         self.repo = destinations_repo
+        self._country_name_to_code_cache: Dict[str, str] = {}
 
     async def sync_all_destinations(
         self,
@@ -164,6 +153,68 @@ class DestinationsSyncService:
             if "destinationId" in dest
         }
 
+    def _get_country_code_from_name(self, country_name: str) -> Optional[str]:
+        """
+        Convert country name to ISO 3166-1 alpha-2 code using pycountry with fuzzy matching.
+
+        Args:
+            country_name: Name of the country (e.g., "France", "United States")
+
+        Returns:
+            ISO alpha-2 country code (e.g., "FR", "US") or None if not found
+        """
+        if not country_name:
+            return None
+
+        # Check cache first
+        if country_name in self._country_name_to_code_cache:
+            return self._country_name_to_code_cache[country_name]
+
+        # Try exact match first (case insensitive)
+        try:
+            country = pycountry.countries.get(name=country_name)
+            if country:
+                code = country.alpha_2
+                self._country_name_to_code_cache[country_name] = code
+                return code
+        except (KeyError, AttributeError):
+            pass
+
+        # Try fuzzy matching on all country names
+        all_countries = list(pycountry.countries)
+        country_names = [c.name for c in all_countries]
+
+        # Also include common names (like "United States" instead of "United States of America")
+        for country in all_countries:
+            if hasattr(country, 'common_name'):
+                country_names.append(country.common_name)
+            if hasattr(country, 'official_name'):
+                country_names.append(country.official_name)
+
+        # Fuzzy match with threshold of 80
+        match = process.extractOne(
+            country_name,
+            country_names,
+            scorer=fuzz.ratio,
+            score_cutoff=80
+        )
+
+        if match:
+            matched_name, score = match[0], match[1]
+            logger.debug(f"Fuzzy matched '{country_name}' → '{matched_name}' (score: {score})")
+
+            # Find the country object with this name
+            for country in all_countries:
+                if country.name == matched_name or \
+                   (hasattr(country, 'common_name') and country.common_name == matched_name) or \
+                   (hasattr(country, 'official_name') and country.official_name == matched_name):
+                    code = country.alpha_2
+                    self._country_name_to_code_cache[country_name] = code
+                    return code
+
+        logger.warning(f"Could not find country code for: '{country_name}'")
+        return None
+
     def _transform_destination(
         self,
         viator_dest: Dict[str, Any],
@@ -181,13 +232,14 @@ class DestinationsSyncService:
         """
         dest_id = str(viator_dest["destinationId"])
         dest_type = viator_dest.get("type", "UNKNOWN")
+        dest_name = viator_dest.get("name", "")
         parent_id = viator_dest.get("parentDestinationId")
         parent_id_str = str(parent_id) if parent_id else None
 
-        # Determine country code
+        # Determine country code dynamically using pycountry (no hardcoded mappings)
         country_code = self._determine_country_code(
             dest_type,
-            dest_id,
+            dest_name,
             parent_id_str,
             parent_lookup
         )
@@ -233,39 +285,48 @@ class DestinationsSyncService:
     def _determine_country_code(
         self,
         dest_type: str,
-        dest_id: str,
+        dest_name: str,
         parent_ref: Optional[str],
         parent_lookup: Dict[str, Dict[str, Any]]
     ) -> Optional[str]:
         """
-        Determine country code for a destination.
+        Dynamically determine country code for a destination using pycountry.
+
+        This method uses NO hardcoded mappings - it resolves country names to ISO codes
+        dynamically using the pycountry library with fuzzy matching.
 
         Args:
-            dest_type: Type of destination
-            dest_id: Destination ID
-            parent_ref: Parent destination ref
-            parent_lookup: Lookup for parent destinations
+            dest_type: Type of destination (CITY, COUNTRY, REGION, etc.)
+            dest_name: Name of the destination
+            parent_ref: Parent destination ID (as string)
+            parent_lookup: Lookup dict for parent destinations
 
         Returns:
             ISO 3166-1 alpha-2 country code or None
         """
-        # If it's a country, try to map the ID
-        if dest_type == "COUNTRY" and dest_id in self.COUNTRY_CODES:
-            return self.COUNTRY_CODES[dest_id]
+        # If it's a country itself, convert its name to ISO code
+        if dest_type == "COUNTRY":
+            return self._get_country_code_from_name(dest_name)
 
-        # Otherwise, look up the parent
-        if parent_ref:
-            # If parent is a known country
-            if parent_ref in self.COUNTRY_CODES:
-                return self.COUNTRY_CODES[parent_ref]
+        # Otherwise, traverse up the parent chain to find the country
+        current_parent_ref = parent_ref
+        max_depth = 5  # Prevent infinite loops
 
-            # Recursively check parent's parent
-            if parent_ref in parent_lookup:
-                parent = parent_lookup[parent_ref]
-                parent_parent_id = parent.get("parentDestinationId")
-                parent_parent_ref = str(parent_parent_id) if parent_parent_id else None
-                if parent_parent_ref and parent_parent_ref in self.COUNTRY_CODES:
-                    return self.COUNTRY_CODES[parent_parent_ref]
+        for _ in range(max_depth):
+            if not current_parent_ref or current_parent_ref not in parent_lookup:
+                break
+
+            parent = parent_lookup[current_parent_ref]
+            parent_type = parent.get("type", "")
+            parent_name = parent.get("name", "")
+
+            # If we found a country parent, convert its name to code
+            if parent_type == "COUNTRY":
+                return self._get_country_code_from_name(parent_name)
+
+            # Move up to the next parent
+            parent_parent_id = parent.get("parentDestinationId")
+            current_parent_ref = str(parent_parent_id) if parent_parent_id else None
 
         return None
 
