@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     mongodb_collection_poi: str = Field("poi_details", alias="MONGODB_COLLECTION_POI")
     mongodb_collection_activities: str = Field("activities", alias="MONGODB_COLLECTION_ACTIVITIES")
     mongodb_collection_destinations: str = Field("destinations", alias="MONGODB_COLLECTION_DESTINATIONS")
+    mongodb_collection_tags: str = Field("tags", alias="MONGODB_COLLECTION_TAGS")
     mongodb_collection_categories: str = Field("categories", alias="MONGODB_COLLECTION_CATEGORIES")
 
     # PostgreSQL/Supabase (optional - for autocomplete feature)

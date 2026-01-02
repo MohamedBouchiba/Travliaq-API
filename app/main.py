@@ -33,6 +33,7 @@ from app.services.location_resolver import LocationResolver
 from app.services.destinations_sync import DestinationsSyncService
 from app.repositories.activities_repository import ActivitiesRepository
 from app.repositories.destinations_repository import DestinationsRepository
+from app.repositories.tags_repository import TagsRepository
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
@@ -134,6 +135,11 @@ async def startup_event() -> None:
         app.state.destinations_repo = DestinationsRepository(destinations_collection)
         await app.state.destinations_repo.create_indexes()
 
+        # Initialize tags repository
+        tags_collection = mongo_db[settings.mongodb_collection_tags]
+        app.state.tags_repo = TagsRepository(tags_collection)
+        await app.state.tags_repo.create_indexes()
+
         # Initialize destinations sync service
         app.state.destinations_sync_service = DestinationsSyncService(
             viator_destinations=app.state.viator_destinations_service,
@@ -149,6 +155,7 @@ async def startup_event() -> None:
             viator_products=app.state.viator_products,
             redis_cache=app.state.redis_cache,
             activities_repo=app.state.activities_repo,
+            tags_repo=app.state.tags_repo,
             location_resolver=app.state.location_resolver,
             cache_ttl=settings.cache_ttl_activities_search
         )
@@ -159,6 +166,7 @@ async def startup_event() -> None:
         app.state.viator_destinations_service = None
         app.state.activities_repo = None
         app.state.destinations_repo = None
+        app.state.tags_repo = None
         app.state.destinations_sync_service = None
         app.state.location_resolver = None
         app.state.activities_service = None
