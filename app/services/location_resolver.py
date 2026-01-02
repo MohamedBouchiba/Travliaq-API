@@ -52,6 +52,15 @@ class LocationResolver:
         cursor = self.destinations.find(query).limit(1000)
         cities = await cursor.to_list(length=1000)
 
+        # If no cities found with country code, try without it (fallback)
+        if not cities and country_code:
+            logger.warning(
+                f"No cities found with country_code={country_code}, trying without country filter..."
+            )
+            query_without_country = {"type": "city"}
+            cursor = self.destinations.find(query_without_country).limit(1000)
+            cities = await cursor.to_list(length=1000)
+
         if not cities:
             logger.warning(
                 f"No cities found in database for query: {query}. "
