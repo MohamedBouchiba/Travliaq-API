@@ -32,100 +32,20 @@ SORT_MAPPING = {
     "date_added": "DATE_ADDED"
 }
 
-# Simplified category to Viator tags mapping
-# Note: In production, this should be stored in MongoDB and fetched dynamically
-CATEGORY_TAG_MAPPING = {
-    "food": {
-        "name": "Food & Dining",
-        "name_translations": {
-            "fr": "Gastronomie",
-            "es": "Gastronomía",
-            "de": "Essen & Trinken"
-        },
-        "viator_tags": [21972, 21973, 21974],
-        "icon": "🍴"
-    },
-    "museum": {
-        "name": "Museums",
-        "name_translations": {
-            "fr": "Musées",
-            "es": "Museos",
-            "de": "Museen"
-        },
-        "viator_tags": [21975],
-        "icon": "🏛️"
-    },
-    "art": {
-        "name": "Art & Culture",
-        "name_translations": {
-            "fr": "Art & Culture",
-            "es": "Arte y Cultura",
-            "de": "Kunst & Kultur"
-        },
-        "viator_tags": [21976, 21977],
-        "icon": "🎨"
-    },
-    "adventure": {
-        "name": "Adventure & Outdoor",
-        "name_translations": {
-            "fr": "Aventure & Plein air",
-            "es": "Aventura y Aire libre",
-            "de": "Abenteuer & Outdoor"
-        },
-        "viator_tags": [21980, 21981],
-        "icon": "⛰️"
-    },
-    "nature": {
-        "name": "Nature & Wildlife",
-        "name_translations": {
-            "fr": "Nature & Faune",
-            "es": "Naturaleza y Vida Silvestre",
-            "de": "Natur & Tierwelt"
-        },
-        "viator_tags": [21985],
-        "icon": "🌿"
-    },
-    "tours": {
-        "name": "City Tours",
-        "name_translations": {
-            "fr": "Visites de la ville",
-            "es": "Tours por la ciudad",
-            "de": "Stadtführungen"
-        },
-        "viator_tags": [21990],
-        "icon": "🚌"
-    },
-    "water": {
-        "name": "Water Activities",
-        "name_translations": {
-            "fr": "Activités nautiques",
-            "es": "Actividades acuáticas",
-            "de": "Wasseraktivitäten"
-        },
-        "viator_tags": [21995],
-        "icon": "🌊"
-    },
-    "nightlife": {
-        "name": "Nightlife",
-        "name_translations": {
-            "fr": "Vie nocturne",
-            "es": "Vida nocturna",
-            "de": "Nachtleben"
-        },
-        "viator_tags": [22000],
-        "icon": "🌃"
-    },
-    "shopping": {
-        "name": "Shopping",
-        "name_translations": {
-            "fr": "Shopping",
-            "es": "Compras",
-            "de": "Einkaufen"
-        },
-        "viator_tags": [22005],
-        "icon": "🛍️"
-    }
-}
+# ============================================================================
+# CATEGORY_TAG_MAPPING REMOVED - Now 100% Dynamic from Viator API
+# ============================================================================
+# Categories and tags are now fetched from Viator /products/tags endpoint
+# and stored in MongoDB via TaxonomySyncService.
+#
+# The old hardcoded mapping violated the "rien de hardcoder" requirement.
+# Tags are now resolved dynamically at runtime from the tags collection.
+#
+# See:
+# - app.services.taxonomy_sync.TaxonomySyncService (sync Viator tags to MongoDB)
+# - app.repositories.tags_repository.TagsRepository (query tags from MongoDB)
+# - app.services.activities_service.ActivitiesService._map_categories_to_tags (dynamic mapping)
+# ============================================================================
 
 # Error codes
 ERROR_CODES = {

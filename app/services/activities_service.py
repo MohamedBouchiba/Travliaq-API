@@ -12,6 +12,7 @@ from app.services.viator.products import ViatorProductsService
 from app.services.redis_cache import RedisCache
 from app.services.location_resolver import LocationResolver
 from app.repositories.activities_repository import ActivitiesRepository
+from app.repositories.tags_repository import TagsRepository
 from app.utils.viator_mapper import ViatorMapper
 from app.models.activities import (
     ActivitySearchRequest,
@@ -20,7 +21,7 @@ from app.models.activities import (
     LocationResolution,
     CacheInfo
 )
-from app.core.constants import CATEGORY_TAG_MAPPING, SORT_MAPPING
+from app.core.constants import SORT_MAPPING
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class ActivitiesService:
         viator_products: ViatorProductsService,
         redis_cache: RedisCache,
         activities_repo: ActivitiesRepository,
+        tags_repo: TagsRepository,
         location_resolver: LocationResolver,
         cache_ttl: int = 604800  # 7 days
     ):
@@ -41,6 +43,7 @@ class ActivitiesService:
         self.viator_products = viator_products
         self.cache = redis_cache
         self.repo = activities_repo
+        self.tags_repo = tags_repo
         self.location_resolver = location_resolver
         self.cache_ttl = cache_ttl
 
@@ -176,8 +179,11 @@ class ActivitiesService:
 
     async def _call_viator_search(self, destination_id: str, request: ActivitySearchRequest) -> dict:
         """Call Viator products search API."""
-        # Map simple categories to Viator tags
-        tags = self._map_categories_to_tags(request.filters.categories if request.filters else [])
+        # Map simple categories to Viator tags dynamically from MongoDB
+        tags = await self._map_categories_to_tags(
+            request.filters.categories if request.filters else [],
+            language=request.language
+        )
 
         # Build filters
         kwargs = {
@@ -211,15 +217,36 @@ class ActivitiesService:
 
         return await self.viator_products.search_products(**kwargs)
 
-    def _map_categories_to_tags(self, categories: Optional[list[str]]) -> Optional[list[int]]:
-        """Map simplified categories to Viator tag IDs."""
+    async def _map_categories_to_tags(self, categories: Optional[list[str]], language: str = "en") -> Optional[list[int]]:
+        """
+        Map simplified categories to Viator tag IDs dynamically from MongoDB.
+
+        NO hardcoded mappings - searches MongoDB tags collection for matching tags.
+
+        Args:
+            categories: List of category keywords (e.g., ['food', 'museum'])
+            language: Language code for searching
+
+        Returns:
+            List of Viator tag IDs or None
+        """
         if not categories:
             return None
 
         tags = []
         for category in categories:
-            if category in CATEGORY_TAG_MAPPING:
-                tags.extend(CATEGORY_TAG_MAPPING[category]["viator_tags"])
+            # Search MongoDB for tags matching this category keyword
+            matching_tags = await self.tags_repo.find_tags_by_category_keyword(
+                keyword=category,
+                language=language
+            )
+
+            # Extract tag IDs
+            for tag in matching_tags:
+                tags.append(tag["tag_id"])
+
+            if not matching_tags:
+                logger.warning(f"No tags found in MongoDB for category: '{category}'")
 
         return list(set(tags)) if tags else None
 
