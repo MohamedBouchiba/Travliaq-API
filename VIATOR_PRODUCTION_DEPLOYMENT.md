@@ -34,6 +34,7 @@ Ajoute ces variables à ton `.env` de production:
 VIATOR_API_KEY_DEV=1029cf59-4682-496d-8c16-9a229a388861
 VIATOR_API_KEY_PROD=a8f758b5-0349-4eb0-99f6-41381526417c
 VIATOR_ENV=prod  # Important: utiliser "prod" en production
+VIATOR_BASE_URL=https://api.viator.com/partner  # IMPORTANT: Doit inclure /partner !
 
 # MongoDB Collections (Déjà configuré)
 MONGODB_COLLECTION_ACTIVITIES=activities

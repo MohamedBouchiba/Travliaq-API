@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     viator_api_key_dev: str = Field("", alias="VIATOR_API_KEY_DEV")
     viator_api_key_prod: str = Field("", alias="VIATOR_API_KEY_PROD")
     viator_env: str = Field("dev", alias="VIATOR_ENV")
-    viator_base_url: str = Field("https://api.viator.com", alias="VIATOR_BASE_URL")
+    viator_base_url: str = Field("https://api.viator.com/partner", alias="VIATOR_BASE_URL")
 
     @property
     def viator_api_key(self) -> str:

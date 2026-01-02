@@ -54,8 +54,9 @@ class ViatorDestinationsService:
                 language=language
             )
 
-            destinations = response.get("data", [])
-            logger.info(f"Retrieved {len(destinations)} destinations from Viator")
+            destinations = response.get("destinations", [])
+            total_count = response.get("totalCount", 0)
+            logger.info(f"Retrieved {len(destinations)} destinations from Viator (totalCount: {total_count})")
 
             return destinations
 
