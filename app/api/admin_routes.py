@@ -202,3 +202,30 @@ async def get_destinations_stats(request: Request) -> dict:
                 "message": f"Failed to get stats: {str(e)}"
             }
         )
+
+
+@router.get(
+    "/destinations/search/{city_name}",
+    summary="Debug: Search for a city by name",
+    description="Debug endpoint to see what's stored in the database for a specific city"
+)
+async def debug_search_city(request: Request, city_name: str, country_code: Optional[str] = None) -> dict:
+    """Debug endpoint to search for a city and see its full data."""
+    if not hasattr(request.app.state, 'destinations_repo'):
+        raise HTTPException(status_code=503, detail="Destinations repository not available")
+
+    repo = request.app.state.destinations_repo
+
+    # Build query
+    query = {"name": {"$regex": city_name, "$options": "i"}, "type": "city"}
+    if country_code:
+        query["country_code"] = country_code.upper()
+
+    # Find matches
+    matches = await repo.collection.find(query).limit(10).to_list(length=10)
+
+    return {
+        "query": query,
+        "count": len(matches),
+        "results": matches
+    }
