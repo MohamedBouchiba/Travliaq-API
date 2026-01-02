@@ -33,14 +33,13 @@ class ActivitiesRepository:
             {
                 "$set": activity_data_clean,
                 "$setOnInsert": {
-                    "metadata.first_seen": now,
-                    "metadata.fetch_count": 0  # Start at 0, will be incremented to 1
+                    "metadata.first_seen": now
                 },
                 "$currentDate": {
                     "metadata.last_updated": True
                 },
                 "$inc": {
-                    "metadata.fetch_count": 1  # Increment (0->1 on insert, N->N+1 on update)
+                    "metadata.fetch_count": 1  # Auto-initializes to 1 on insert, increments on update
                 }
             },
             upsert=True

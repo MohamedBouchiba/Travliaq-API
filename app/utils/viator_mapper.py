@@ -3,7 +3,6 @@
 from __future__ import annotations
 import logging
 from typing import Optional
-from app.core.constants import CATEGORY_TAG_MAPPING
 
 logger = logging.getLogger(__name__)
 
@@ -119,27 +118,24 @@ class ViatorMapper:
     @staticmethod
     def _map_tags_to_categories(tags: list[int]) -> list[str]:
         """
-        Map Viator tag IDs to simplified category names.
+        Convert Viator tag IDs to string representations.
+
+        NOTE: This is a temporary simple implementation. Tag IDs are converted to strings.
+        For production, this should be enhanced to:
+        - Look up tag names from MongoDB tags collection
+        - Map to user-friendly category names
+        - Support multilingual tag names
 
         Args:
             tags: List of Viator tag IDs
 
         Returns:
-            List of simplified category names
+            List of tag IDs as strings (or ["general"] if no tags)
         """
-        categories = []
+        # For now, convert tag IDs to strings to preserve information
+        # Frontend can look up tag names from /tags endpoint if needed
+        if not tags:
+            return ["general"]
 
-        # Create reverse mapping: tag_id -> category_id
-        tag_to_category = {}
-        for category_id, category_data in CATEGORY_TAG_MAPPING.items():
-            for tag_id in category_data["viator_tags"]:
-                tag_to_category[tag_id] = category_id
-
-        # Map tags to categories
-        for tag_id in tags:
-            if tag_id in tag_to_category:
-                category = tag_to_category[tag_id]
-                if category not in categories:
-                    categories.append(category)
-
-        return categories if categories else ["general"]
+        # Return first 5 tags as strings to avoid too many categories
+        return [f"tag_{tag_id}" for tag_id in tags[:5]]
