@@ -1447,7 +1447,13 @@ class ActivitiesService:
         # Include geo info to differentiate city vs geo searches
         geo_suffix = ""
         if request.location.geo:
-            geo_suffix = f":geo:{request.location.geo.lat:.4f}:{request.location.geo.lon:.4f}:{request.location.geo.radius_km}"
+            # Bounds search (map viewport)
+            if request.location.geo.bounds:
+                bounds = request.location.geo.bounds
+                geo_suffix = f":bounds:{bounds.north:.4f}:{bounds.south:.4f}:{bounds.east:.4f}:{bounds.west:.4f}"
+            # Point search (lat/lon + radius)
+            elif request.location.geo.lat is not None and request.location.geo.lon is not None:
+                geo_suffix = f":geo:{request.location.geo.lat:.4f}:{request.location.geo.lon:.4f}:{request.location.geo.radius_km}"
 
         return f"{destination_id}:{request.dates.start.isoformat()}:{end_date}:{filters_hash}:{mode}{geo_suffix}"
 
