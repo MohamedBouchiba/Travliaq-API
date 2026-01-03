@@ -1277,6 +1277,11 @@ class ActivitiesService:
         try:
             from app.utils.coordinate_dispersion import _haversine_distance
 
+            # Check if radius_km is valid
+            if radius_km is None or search_coords is None:
+                logger.warning("[GEO] Skipping geo filtering: radius_km or search_coords is None")
+                return activities, total_count
+
             logger.info(
                 f"[GEO] Filtering {len(activities)} activities within {radius_km}km "
                 f"of ({search_coords['lat']:.4f}, {search_coords['lon']:.4f})"
