@@ -125,9 +125,12 @@ class ActivitiesService:
         from app.models.activities import SearchMode
 
         if request.search_mode == SearchMode.BOTH:
-            # UNIFIED SEARCH: Fetch both activities and attractions in parallel
-            logger.info(f"[UNIFIED] Fetching BOTH activities AND attractions for destination {destination_id}")
-            activities, total_count = await self._search_unified(destination_id, request)
+            # UNIFIED SEARCH V2: Fetch activities and attractions separately
+            logger.info(f"[UNIFIED_V2] Fetching BOTH activities AND attractions for destination {destination_id}")
+            activities, attractions, total_activities, total_attractions = await self._search_unified(destination_id, request)
+
+            # For backward compatibility, also set total_count (deprecated)
+            total_count = total_activities + total_attractions
 
         elif request.search_mode == SearchMode.ATTRACTIONS:
             # ATTRACTIONS ONLY
@@ -151,7 +154,13 @@ class ActivitiesService:
             for activity in activities:
                 activity["type"] = "attraction"
 
-            logger.info(f"Transformed {len(activities)} attractions from Viator response")
+            # V2: Initialize separate pools (attractions mode → all go to attractions)
+            attractions = activities
+            activities = []
+            total_attractions = total_count
+            total_activities = 0
+
+            logger.info(f"Transformed {len(attractions)} attractions from Viator response")
 
         else:  # SearchMode.ACTIVITIES (default)
             # ACTIVITIES ONLY
@@ -168,6 +177,11 @@ class ActivitiesService:
             # Set type field for consistency
             for activity in activities:
                 activity["type"] = "activity"
+
+            # V2: Initialize separate pools (activities mode → all go to activities)
+            attractions = []
+            total_activities = total_count
+            total_attractions = 0
 
             logger.info(f"Transformed {len(activities)} activities from Viator response")
 
@@ -195,12 +209,23 @@ class ActivitiesService:
         # 5. Persist in MongoDB (async, non-blocking)
         await self._persist_activities(activities)
 
-        # 6. Cache results
+        # 6. Build results with V2 structure
+        # V1 fields (backward compatibility - deprecated)
+        combined_for_v1 = activities + attractions  # For clients using old 'activities' field
+
         results = SearchResults(
+            # V1 fields (deprecated but kept for backward compatibility)
             total=total_count,
             page=request.pagination.page,
             limit=request.pagination.limit,
-            activities=activities
+            activities=combined_for_v1,
+
+            # V2 fields (NEW - separate activities and attractions)
+            attractions=attractions,
+            activities_list=activities,
+            total_attractions=total_attractions,
+            total_activities=total_activities,
+            has_more=(total_activities + total_attractions) > (request.pagination.page * request.pagination.limit)
         )
 
         cache_data = {
@@ -250,23 +275,47 @@ class ActivitiesService:
                     search_type="city"
                 )
 
-        # Option 3: Geo coordinates
+        # Option 3: Geo coordinates (point OR bounds)
         if location.geo:
             geo = location.geo
-            result = await self.location_resolver.resolve_geo(
-                geo.lat,
-                geo.lon,
-                geo.radius_km
-            )
-            if result:
-                dest_id, city_name, distance_km = result
-                return dest_id, LocationResolution(
-                    matched_city=city_name,
-                    destination_id=dest_id,
-                    coordinates={"lat": geo.lat, "lon": geo.lon},
-                    distance_km=distance_km,
-                    search_type="geo"
+
+            # Check if bounds provided (map viewport search)
+            if geo.bounds:
+                logger.info(f"[GEO_BOUNDS] Converting bounds to center + radius...")
+                center_lat, center_lon, radius_km = self._bounds_to_center_radius(geo.bounds.model_dump())
+
+                result = await self.location_resolver.resolve_geo(
+                    center_lat,
+                    center_lon,
+                    radius_km
                 )
+                if result:
+                    dest_id, city_name, distance_km = result
+                    return dest_id, LocationResolution(
+                        matched_city=city_name,
+                        destination_id=dest_id,
+                        coordinates={"lat": center_lat, "lon": center_lon},
+                        distance_km=distance_km,
+                        search_type="geo_bounds"
+                    )
+
+            # Point search (existing)
+            elif geo.lat is not None and geo.lon is not None:
+                radius_km = geo.radius_km or 50  # Default radius
+                result = await self.location_resolver.resolve_geo(
+                    geo.lat,
+                    geo.lon,
+                    radius_km
+                )
+                if result:
+                    dest_id, city_name, distance_km = result
+                    return dest_id, LocationResolution(
+                        matched_city=city_name,
+                        destination_id=dest_id,
+                        coordinates={"lat": geo.lat, "lon": geo.lon},
+                        distance_km=distance_km,
+                        search_type="geo"
+                    )
 
         return None, LocationResolution(destination_id="", matched_city=None)
 
@@ -384,48 +433,108 @@ class ActivitiesService:
 
         return selected[:target_count]
 
-    async def _search_unified(self, destination_id: str, request: ActivitySearchRequest) -> tuple[list[dict], int]:
+    def _score_and_rank_attractions(
+        self,
+        attractions: list[dict],
+        limit: int = 15
+    ) -> list[dict]:
         """
-        Unified search: Fetch BOTH activities and attractions in parallel and merge them.
+        Score and rank attractions by importance for map pin display.
 
-        Strategy:
-        - Over-fetch: Fetch 1.5x requested limit for both types (max 100 each from Viator)
-        - Transform both to common format
-        - Merge and sort by rating
-        - Apply intelligent balancing to achieve target ratio (50/50 by default)
-        - Apply pagination to balanced results
+        Importance formula: rating.average × rating.count
+        This favors attractions that are both highly rated AND popular.
+
+        Example:
+        - Attraction A: 4.5★ × 500 reviews = 2250 (importance score)
+        - Attraction B: 5.0★ × 10 reviews = 50 (importance score)
+        → Attraction A is ranked higher despite lower rating
+
+        Args:
+            attractions: List of attraction dictionaries
+            limit: Maximum number of attractions to return (default 15 for map pins)
+
+        Returns:
+            Top N attractions sorted by importance score (descending)
+        """
+        if not attractions:
+            return []
+
+        # Calculate importance score for each attraction
+        for attraction in attractions:
+            rating_data = attraction.get("rating", {})
+            rating_avg = rating_data.get("average", 0)
+            rating_count = rating_data.get("count", 0)
+
+            # Importance = rating × popularity
+            attraction["_importance_score"] = rating_avg * rating_count
+
+        # Sort by importance score (descending)
+        sorted_attractions = sorted(
+            attractions,
+            key=lambda x: x.get("_importance_score", 0),
+            reverse=True
+        )
+
+        # Take top N
+        top_attractions = sorted_attractions[:limit]
+
+        logger.info(
+            f"[ATTRACTION_SCORING] Scored {len(attractions)} attractions → "
+            f"selected top {len(top_attractions)} for map pins"
+        )
+
+        if top_attractions:
+            # Log top 3 for debugging
+            for i, attr in enumerate(top_attractions[:3], 1):
+                logger.debug(
+                    f"  #{i}: {attr.get('title', 'Unknown')[:40]} - "
+                    f"Score: {attr.get('_importance_score', 0):.0f} "
+                    f"({attr.get('rating', {}).get('average', 0):.1f}★ × "
+                    f"{attr.get('rating', {}).get('count', 0)} reviews)"
+                )
+
+        return top_attractions
+
+    async def _search_unified(self, destination_id: str, request: ActivitySearchRequest) -> tuple[list[dict], list[dict], int, int]:
+        """
+        Unified search V2: Fetch activities and attractions SEPARATELY for distinct display.
+
+        NEW Strategy (V2):
+        - Fetch 40 activities (with user filters) for LIST display
+        - Fetch 100 attractions (over-fetch), score by importance, select top 15 for MAP pins
+        - NO merging/balancing - they're displayed separately (list vs map)
 
         Args:
             destination_id: Viator destination ID
             request: Search request with filters and pagination
 
         Returns:
-            Tuple of (merged_activities, total_count)
+            Tuple of (activities, attractions, total_activities, total_attractions)
+            - activities: List for panel display (respects filters, pagination)
+            - attractions: Top 15 for map pins only (scored by importance)
         """
-        logger.info(f"[UNIFIED] Starting parallel fetch for destination {destination_id}")
+        logger.info(f"[UNIFIED_V2] Starting separate fetch for destination {destination_id}")
 
-        # Calculate adaptive fetch limits for over-fetching strategy
-        # Fetch 1.5x more than requested to enable better balancing
-        requested_limit = request.pagination.limit
-        activities_limit = min(int(requested_limit * 1.5), 100)  # Max 100 from Viator API
-        attractions_limit = min(int(requested_limit * 1.5), 100)
+        # V2: Different fetch strategies
+        # Activities: Use requested limit (typically 40) with filters
+        activities_limit = request.pagination.limit  # e.g., 40
+
+        # Attractions: Over-fetch 100 for scoring, then select top 15
+        attractions_limit = 100
 
         logger.info(
-            f"[UNIFIED] Over-fetch strategy: requesting {requested_limit} items, "
-            f"fetching {activities_limit} activities + {attractions_limit} attractions"
+            f"[UNIFIED_V2] Fetch strategy: {activities_limit} activities (filtered) + "
+            f"{attractions_limit} attractions (for scoring → top 15)"
         )
 
         # Prepare parallel tasks
         async def fetch_activities():
-            """Fetch and transform activities."""
+            """Fetch and transform activities with user filters."""
             try:
-                logger.info(f"[UNIFIED] Fetching activities (limit: {activities_limit})...")
+                logger.info(f"[UNIFIED_V2] Fetching {activities_limit} activities with filters...")
 
-                # Create a modified request with increased limit for over-fetching
-                modified_request = request.model_copy(deep=True)
-                modified_request.pagination.limit = activities_limit
-
-                viator_response = await self._call_viator_search(destination_id, modified_request)
+                # Use request limit directly (no over-fetch for activities)
+                viator_response = await self._call_viator_search(destination_id, request)
 
                 activities = [
                     ViatorMapper.map_product_summary(product)
@@ -436,42 +545,53 @@ class ActivitiesService:
                 for activity in activities:
                     activity["type"] = "activity"
 
-                logger.info(f"[UNIFIED] Fetched {len(activities)} activities (total: {viator_response.get('totalCount', 0)})")
+                logger.info(
+                    f"[UNIFIED_V2] Fetched {len(activities)} activities "
+                    f"(total available: {viator_response.get('totalCount', 0)})"
+                )
 
                 # Enrich with locations
                 await self._enrich_activities_with_locations(activities, language=request.language)
 
                 return activities, viator_response.get("totalCount", 0)
             except Exception as e:
-                logger.error(f"[UNIFIED] Error fetching activities: {e}")
+                logger.error(f"[UNIFIED_V2] Error fetching activities: {e}")
                 return [], 0
 
         async def fetch_attractions():
-            """Fetch and transform attractions."""
+            """Fetch and score attractions for map pins (NO filters, importance-based)."""
             try:
-                logger.info(f"[UNIFIED] Fetching attractions (limit: {attractions_limit})...")
+                logger.info(f"[UNIFIED_V2] Fetching {attractions_limit} attractions for scoring...")
+
+                # Fetch 100 attractions (no filters - we want variety for map)
                 viator_response = await self.viator_attractions.search_attractions(
                     destination_id=destination_id,
                     sort="DEFAULT",
                     start=1,
-                    count=attractions_limit,  # Dynamic limit based on over-fetch strategy
+                    count=attractions_limit,
                     language=request.language
                 )
 
-                attractions = [
+                attractions_raw = [
                     ViatorMapper.map_attraction(attraction)
                     for attraction in viator_response.get("attractions", [])
                 ]
 
                 # Add type field
-                for attraction in attractions:
+                for attraction in attractions_raw:
                     attraction["type"] = "attraction"
 
-                logger.info(f"[UNIFIED] Fetched {len(attractions)} attractions (total: {viator_response.get('totalCount', 0)})")
+                logger.info(
+                    f"[UNIFIED_V2] Fetched {len(attractions_raw)} attractions "
+                    f"(total available: {viator_response.get('totalCount', 0)})"
+                )
 
-                return attractions, viator_response.get("totalCount", 0)
+                # Score and select top 15 for map pins
+                top_attractions = self._score_and_rank_attractions(attractions_raw, limit=15)
+
+                return top_attractions, viator_response.get("totalCount", 0)
             except Exception as e:
-                logger.error(f"[UNIFIED] Error fetching attractions: {e}")
+                logger.error(f"[UNIFIED_V2] Error fetching attractions: {e}")
                 return [], 0
 
         # Execute both in parallel
@@ -480,48 +600,15 @@ class ActivitiesService:
             fetch_attractions()
         )
 
-        # Merge results
-        merged = activities + attractions
-
         logger.info(
-            f"[UNIFIED] Merged results: {len(activities)} activities + {len(attractions)} attractions = {len(merged)} total"
+            f"[UNIFIED_V2] Fetch complete: {len(activities)} activities + "
+            f"{len(attractions)} attractions (separate pools)"
         )
 
-        # Sort by rating (descending)
-        merged.sort(
-            key=lambda x: x.get("rating", {}).get("average", 0),
-            reverse=True
-        )
+        # V2: NO merging, NO balancing - they're displayed separately
+        # Activities go to list panel, Attractions go to map pins
 
-        logger.info(f"[UNIFIED] Sorted {len(merged)} items by rating")
-
-        # Apply intelligent balancing BEFORE pagination
-        # Calculate total items needed for all pages up to current page
-        total_needed = request.pagination.page * request.pagination.limit
-
-        # Balance the full pool to achieve target 50/50 ratio
-        balanced = self._balance_results(
-            merged_results=merged,
-            target_count=min(total_needed, len(merged)),
-            target_ratio={"activity": 0.5, "attraction": 0.5}  # 50/50 split
-        )
-
-        logger.info(f"[UNIFIED] Balanced {len(merged)} items → {len(balanced)} balanced items")
-
-        # Now apply pagination to the balanced results
-        start_idx = (request.pagination.page - 1) * request.pagination.limit
-        end_idx = start_idx + request.pagination.limit
-        paginated = balanced[start_idx:end_idx]
-
-        logger.info(
-            f"[UNIFIED] Pagination: page {request.pagination.page}, "
-            f"showing items {start_idx+1}-{min(end_idx, len(balanced))} of {len(balanced)}"
-        )
-
-        # Total count is sum of both
-        total_count = activities_total + attractions_total
-
-        return paginated, total_count
+        return activities, attractions, activities_total, attractions_total
 
     async def _map_categories_to_tags(self, categories: Optional[list[str]], language: str = "en") -> Optional[list[int]]:
         """
@@ -1309,6 +1396,42 @@ class ActivitiesService:
             logger.error(f"Error resolving tag names: {e}", exc_info=True)
             # Don't fail the search if tag resolution fails
             pass
+
+    def _bounds_to_center_radius(self, bounds: dict) -> tuple[float, float, float]:
+        """
+        Convert map viewport bounding box to center point + radius.
+
+        Used for "search in this area" feature where user pans/zooms the map.
+
+        Args:
+            bounds: Dict with keys {north, south, east, west} (all floats)
+
+        Returns:
+            Tuple of (center_lat, center_lon, radius_km)
+
+        Example:
+            bounds = {"north": 48.9, "south": 48.8, "east": 2.4, "west": 2.3}
+            → center: (48.85, 2.35), radius: ~7.8 km
+        """
+        from app.utils.coordinate_dispersion import _haversine_distance
+
+        # Calculate center point
+        center_lat = (bounds["north"] + bounds["south"]) / 2
+        center_lon = (bounds["east"] + bounds["west"]) / 2
+
+        # Calculate radius as distance from center to NE corner
+        # This ensures the entire viewport is covered
+        radius_km = _haversine_distance(
+            center_lat, center_lon,
+            bounds["north"], bounds["east"]
+        )
+
+        logger.debug(
+            f"[BOUNDS_CONVERSION] Bounds → Center: ({center_lat:.4f}, {center_lon:.4f}), "
+            f"Radius: {radius_km:.2f} km"
+        )
+
+        return center_lat, center_lon, radius_km
 
     def _build_cache_key(self, destination_id: str, request: ActivitySearchRequest) -> str:
         """Build unique cache key for search request."""

@@ -41,11 +41,23 @@ class SearchMode(str, Enum):
 # INPUT MODELS (REQUEST)
 # ============================================================================
 
+class GeoBounds(BaseModel):
+    """Bounding box for map viewport search."""
+    north: float = Field(..., ge=-90, le=90, description="Northern latitude bound")
+    south: float = Field(..., ge=-90, le=90, description="Southern latitude bound")
+    east: float = Field(..., ge=-180, le=180, description="Eastern longitude bound")
+    west: float = Field(..., ge=-180, le=180, description="Western longitude bound")
+
+
 class GeoInput(BaseModel):
-    """Geographic coordinates input."""
-    lat: float = Field(..., ge=-90, le=90)
-    lon: float = Field(..., ge=-180, le=180)
-    radius_km: float = Field(default=50, ge=1, le=50, description="Search radius in km (max 50km)")
+    """Geographic input - supports point search OR bounds search."""
+    # Point search (existing - for backward compatibility)
+    lat: Optional[float] = Field(None, ge=-90, le=90, description="Latitude for point search")
+    lon: Optional[float] = Field(None, ge=-180, le=180, description="Longitude for point search")
+    radius_km: Optional[float] = Field(None, ge=1, le=50, description="Search radius in km (max 50km)")
+
+    # Bounds search (NEW - for map viewport search)
+    bounds: Optional[GeoBounds] = Field(None, description="Bounding box for viewport search")
 
 
 class LocationInput(BaseModel):
@@ -183,11 +195,19 @@ class Activity(BaseModel):
 
 
 class SearchResults(BaseModel):
-    """Search results container."""
-    total: int
+    """Search results container with v2 separation support."""
+    # V1 fields (backward compatibility - deprecated)
+    total: int = Field(..., description="Total results (deprecated - use total_activities + total_attractions)")
     page: int
     limit: int
-    activities: List[Activity]
+    activities: List[Activity] = Field(default_factory=list, description="Combined list (deprecated - use activities_list + attractions)")
+
+    # V2 fields (NEW - separate activities and attractions)
+    attractions: List[Activity] = Field(default_factory=list, description="Top attractions for map pins only")
+    activities_list: List[Activity] = Field(default_factory=list, description="Filtered activities for list display")
+    total_attractions: int = Field(default=0, description="Total attractions available")
+    total_activities: int = Field(default=0, description="Total activities available")
+    has_more: bool = Field(default=False, description="Whether more results are available for pagination")
 
 
 class LocationResolution(BaseModel):

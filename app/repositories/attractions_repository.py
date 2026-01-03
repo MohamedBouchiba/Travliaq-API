@@ -19,6 +19,64 @@ class AttractionsRepository:
     def __init__(self, collection: AsyncIOMotorCollection):
         self.collection = collection
 
+    @staticmethod
+    def _convert_coordinates_to_geojson(data: dict) -> dict:
+        """
+        Convert coordinates from {lat, lon} format to GeoJSON format for MongoDB 2dsphere index.
+
+        MongoDB 2dsphere indexes require GeoJSON format: [longitude, latitude]
+        But our data comes in as: {lat: ..., lon: ...}
+
+        Args:
+            data: Attraction data with location.coordinates
+
+        Returns:
+            Modified data with GeoJSON coordinates
+        """
+        if "location" in data and "coordinates" in data["location"]:
+            coords = data["location"]["coordinates"]
+
+            # Check if coordinates are in {lat, lon} format
+            if isinstance(coords, dict) and "lat" in coords and "lon" in coords:
+                # Convert to GeoJSON Point format: [longitude, latitude]
+                data["location"]["coordinates"] = [coords["lon"], coords["lat"]]
+                logger.debug(
+                    f"Converted coordinates from {{lat: {coords['lat']}, lon: {coords['lon']}}} "
+                    f"to GeoJSON: [{coords['lon']}, {coords['lat']}]"
+                )
+
+        return data
+
+    @staticmethod
+    def _convert_geojson_to_coordinates(data: dict) -> dict:
+        """
+        Convert coordinates from GeoJSON format [lon, lat] back to {lat, lon} format.
+
+        This is used when reading from MongoDB to maintain compatibility with existing code.
+
+        Args:
+            data: Attraction data with GeoJSON coordinates
+
+        Returns:
+            Modified data with {lat, lon} coordinates
+        """
+        if "location" in data and "coordinates" in data["location"]:
+            coords = data["location"]["coordinates"]
+
+            # Check if coordinates are in GeoJSON array format [lon, lat]
+            if isinstance(coords, list) and len(coords) == 2:
+                # Convert back to {lat, lon} format for compatibility
+                data["location"]["coordinates"] = {
+                    "lon": coords[0],
+                    "lat": coords[1]
+                }
+                logger.debug(
+                    f"Converted GeoJSON [{coords[0]}, {coords[1]}] "
+                    f"to {{lat: {coords[1]}, lon: {coords[0]}}}"
+                )
+
+        return data
+
     async def upsert_attraction(self, attraction_id: str, attraction_data: dict):
         """
         Upsert attraction.
@@ -27,6 +85,9 @@ class AttractionsRepository:
             attraction_id: Viator attraction ID (unique identifier)
             attraction_data: Attraction data to store
         """
+        # Convert coordinates to GeoJSON format before storing
+        attraction_data = self._convert_coordinates_to_geojson(attraction_data)
+
         result = await self.collection.update_one(
             {"attraction_id": attraction_id},
             {"$set": attraction_data},
@@ -40,7 +101,10 @@ class AttractionsRepository:
 
     async def get_attraction(self, attraction_id: str) -> Optional[dict]:
         """Get attraction by ID."""
-        return await self.collection.find_one({"attraction_id": attraction_id})
+        attraction = await self.collection.find_one({"attraction_id": attraction_id})
+        if attraction:
+            attraction = self._convert_geojson_to_coordinates(attraction)
+        return attraction
 
     async def find_by_product_code(
         self,
@@ -68,6 +132,7 @@ class AttractionsRepository:
         attraction = await self.collection.find_one(query)
 
         if attraction:
+            attraction = self._convert_geojson_to_coordinates(attraction)
             logger.debug(
                 f"Found attraction for product {product_code}: "
                 f"{attraction.get('name')} (ID: {attraction.get('attraction_id')})"
@@ -106,6 +171,8 @@ class AttractionsRepository:
         # Build reverse map: productCode → attraction
         result = {}
         for attraction in attractions:
+            # Convert coordinates for each attraction
+            attraction = self._convert_geojson_to_coordinates(attraction)
             for product_code in attraction.get("productCodes", []):
                 if product_code in product_codes:
                     result[product_code] = attraction
@@ -137,7 +204,8 @@ class AttractionsRepository:
             {"destination_id": destination_id}
         ).skip(skip).limit(limit)
 
-        return await cursor.to_list(length=limit)
+        attractions = await cursor.to_list(length=limit)
+        return [self._convert_geojson_to_coordinates(a) for a in attractions]
 
     async def search_attractions_by_geo(
         self,
@@ -171,7 +239,8 @@ class AttractionsRepository:
         }
 
         cursor = self.collection.find(query).limit(limit)
-        return await cursor.to_list(length=limit)
+        attractions = await cursor.to_list(length=limit)
+        return [self._convert_geojson_to_coordinates(a) for a in attractions]
 
     async def count_attractions(self, destination_id: Optional[str] = None) -> int:
         """
@@ -209,7 +278,8 @@ class AttractionsRepository:
             "productCodes": {"$exists": True, "$ne": []}
         }).limit(limit)
 
-        return await cursor.to_list(length=limit)
+        attractions = await cursor.to_list(length=limit)
+        return [self._convert_geojson_to_coordinates(a) for a in attractions]
 
     async def create_indexes(self):
         """Create MongoDB indexes for attractions collection."""
