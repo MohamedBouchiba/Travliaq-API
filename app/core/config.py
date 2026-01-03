@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     mongodb_collection_destinations: str = Field("destinations", alias="MONGODB_COLLECTION_DESTINATIONS")
     mongodb_collection_tags: str = Field("tags", alias="MONGODB_COLLECTION_TAGS")
     mongodb_collection_categories: str = Field("categories", alias="MONGODB_COLLECTION_CATEGORIES")
+    mongodb_collection_attractions: str = Field("attractions", alias="MONGODB_COLLECTION_ATTRACTIONS")
+    mongodb_collection_geocoding_cache: str = Field("geocoding_cache", alias="MONGODB_COLLECTION_GEOCODING_CACHE")
 
     # PostgreSQL/Supabase (optional - for autocomplete feature)
     pg_host: str | None = Field(None, alias="PG_HOST")

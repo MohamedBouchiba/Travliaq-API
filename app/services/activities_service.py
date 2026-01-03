@@ -14,7 +14,10 @@ from app.services.redis_cache import RedisCache
 from app.services.location_resolver import LocationResolver
 from app.repositories.activities_repository import ActivitiesRepository
 from app.repositories.tags_repository import TagsRepository
+from app.repositories.attractions_repository import AttractionsRepository
+from app.repositories.geocoding_cache_repository import GeocodingCacheRepository
 from app.utils.viator_mapper import ViatorMapper
+from app.utils.coordinate_dispersion import generate_dispersed_coordinates
 from app.models.activities import (
     ActivitySearchRequest,
     ActivitySearchResponse,
@@ -38,6 +41,8 @@ class ActivitiesService:
         redis_cache: RedisCache,
         activities_repo: ActivitiesRepository,
         tags_repo: TagsRepository,
+        attractions_repo: AttractionsRepository,
+        geocoding_cache_repo: GeocodingCacheRepository,
         location_resolver: LocationResolver,
         cache_ttl: int = 604800  # 7 days
     ):
@@ -47,6 +52,8 @@ class ActivitiesService:
         self.cache = redis_cache
         self.repo = activities_repo
         self.tags_repo = tags_repo
+        self.attractions_repo = attractions_repo
+        self.geocoding_cache_repo = geocoding_cache_repo
         self.location_resolver = location_resolver
         self.cache_ttl = cache_ttl
 
@@ -457,41 +464,202 @@ class ActivitiesService:
                         enriched_count += 1
                         break
 
-            logger.info(f"[ENRICH] Total enriched: {enriched_count}/{len(candidates)}")
+            logger.info(f"[ENRICH] LEVEL 1 (Viator Logistics) enriched: {enriched_count}/{len(candidates)}")
 
-            # Step 4: Fallback to destination coordinates for activities still without coords
-            fallback_count = 0
-            for activity in candidates:
-                if activity.get("location", {}).get("coordinates") is None:
-                    destination_id = activity.get("_destination_id")
-                    if destination_id:
-                        dest_coords = await self.location_resolver.get_destination_coordinates(destination_id)
-                        if dest_coords:
-                            activity["location"]["coordinates"] = dest_coords
-                            activity["location"]["coordinates_precision"] = "destination"
-                            fallback_count += 1
-                            logger.info(f"[ENRICH] Fallback: Activity {activity['id']} → destination coords {dest_coords}")
+            # LEVEL 2: Attraction Matching (reverse lookup productCode → attraction)
+            logger.info(f"[ENRICH] Starting LEVEL 2: Attraction Matching...")
+            await self._enrich_via_attraction_matching(activities)
 
-            logger.info(f"[ENRICH] Fallback enriched: {fallback_count} activities with destination coordinates")
+            # LEVEL 4: Intelligent Dispersion (GeoGuessr-style for remaining activities)
+            logger.info(f"[ENRICH] Starting LEVEL 4: Intelligent Dispersion...")
+            await self._enrich_via_dispersion(activities)
 
-            # Log summary of activities WITH coordinates for debugging
+            # Log final summary
             activities_with_coords = [
                 a for a in candidates
                 if a.get("location", {}).get("coordinates") is not None
             ]
             logger.info(f"[ENRICH] FINAL: {len(activities_with_coords)}/{len(candidates)} activities have coordinates")
 
+            # Count by precision level
+            precision_counts = {}
+            for act in activities_with_coords:
+                precision = act.get("location", {}).get("coordinates_precision", "unknown")
+                precision_counts[precision] = precision_counts.get(precision, 0) + 1
+
+            logger.info(f"[ENRICH] Precision breakdown: {precision_counts}")
+
             if len(activities_with_coords) > 0:
                 # Show first 3 examples
                 for i, act in enumerate(activities_with_coords[:3]):
                     coords = act["location"]["coordinates"]
-                    logger.info(f"[ENRICH]   Example {i+1}: {act['id']} -> {coords}")
+                    precision = act.get("location", {}).get("coordinates_precision", "unknown")
+                    logger.info(f"[ENRICH]   Example {i+1}: {act['id']} -> {coords} ({precision})")
 
 
         except Exception as e:
             logger.error(f"Error enriching activities with locations: {e}", exc_info=True)
             # Don't fail the search if enrichment fails
             pass
+
+    async def _enrich_via_attraction_matching(self, activities: list[dict]):
+        """
+        LEVEL 2: Enrich activities using attraction coordinates (reverse lookup).
+
+        Strategy:
+        - For activities without coordinates, find matching attractions by productCode
+        - Attractions have direct coordinates from Viator
+        - Provides precise location for museum visits, monument tours, etc.
+
+        Args:
+            activities: List of activity dicts (will be modified in-place)
+        """
+        try:
+            # Filter activities needing enrichment
+            candidates = [
+                a for a in activities
+                if not a.get("location", {}).get("coordinates")
+            ]
+
+            if not candidates:
+                logger.info("[LEVEL 2] No activities need attraction matching")
+                return
+
+            logger.info(f"[LEVEL 2] Attempting attraction matching for {len(candidates)} activities")
+
+            # Collect unique destination IDs
+            destination_ids = list(set([a.get("_destination_id") for a in candidates if a.get("_destination_id")]))
+
+            if not destination_ids:
+                logger.warning("[LEVEL 2] No destination IDs available for attraction matching")
+                return
+
+            # Bulk lookup: productCode → attraction
+            # Note: We search by destination for performance (attractions are indexed by destination)
+            enriched_count = 0
+
+            for destination_id in destination_ids:
+                # Get product codes for this destination
+                dest_products = [
+                    a["id"] for a in candidates
+                    if a.get("_destination_id") == destination_id
+                ]
+
+                if not dest_products:
+                    continue
+
+                # Bulk reverse lookup
+                attractions_map = await self.attractions_repo.find_by_product_codes_bulk(
+                    dest_products,
+                    destination_id
+                )
+
+                logger.info(
+                    f"[LEVEL 2] Found {len(attractions_map)} attractions for {len(dest_products)} products "
+                    f"in destination {destination_id}"
+                )
+
+                # Assign coordinates from attractions
+                for activity in candidates:
+                    if activity.get("_destination_id") != destination_id:
+                        continue
+
+                    if activity.get("location", {}).get("coordinates"):
+                        continue  # Already enriched
+
+                    product_code = activity["id"]
+                    attraction = attractions_map.get(product_code)
+
+                    if attraction and attraction.get("location", {}).get("coordinates"):
+                        coords = attraction["location"]["coordinates"]
+                        activity["location"]["coordinates"] = coords
+                        activity["location"]["coordinates_precision"] = "attraction"
+                        activity["location"]["coordinates_source"] = f"attraction_{attraction.get('attraction_id')}"
+
+                        logger.info(
+                            f"[LEVEL 2] Enriched {product_code} via attraction "
+                            f"{attraction.get('attraction_id')}: {coords}"
+                        )
+                        enriched_count += 1
+
+            logger.info(f"[LEVEL 2] Enriched {enriched_count}/{len(candidates)} activities via attractions")
+
+        except Exception as e:
+            logger.error(f"[LEVEL 2] Error during attraction matching: {e}", exc_info=True)
+            # Don't fail - continue to next level
+
+    async def _enrich_via_dispersion(self, activities: list[dict]):
+        """
+        LEVEL 4: Intelligent deterministic dispersion for activities without coordinates.
+
+        Strategy:
+        - Use hash-based seeding for deterministic but varied distribution
+        - Apply sqrt distribution for natural clustering near center
+        - Looks random on map but is repeatable (same activity = same coords)
+
+        Args:
+            activities: List of activity dicts (will be modified in-place)
+        """
+        try:
+            # Filter activities needing dispersion
+            candidates = [
+                a for a in activities
+                if not a.get("location", {}).get("coordinates")
+            ]
+
+            if not candidates:
+                logger.info("[LEVEL 4] No activities need dispersion")
+                return
+
+            logger.info(f"[LEVEL 4] Applying intelligent dispersion to {len(candidates)} activities")
+
+            dispersed_count = 0
+
+            for activity in candidates:
+                destination_id = activity.get("_destination_id")
+                if not destination_id:
+                    logger.warning(f"[LEVEL 4] No destination_id for activity {activity['id']}")
+                    continue
+
+                # Get destination center coordinates
+                dest_coords = await self.location_resolver.get_destination_coordinates(destination_id)
+                if not dest_coords:
+                    logger.warning(f"[LEVEL 4] No coordinates for destination {destination_id}")
+                    continue
+
+                # Get adaptive radius from destination (TODO: add to destinations collection)
+                # For now, use default 5km
+                city_radius_km = 5.0
+
+                # Generate dispersed coordinates
+                dispersed = generate_dispersed_coordinates(
+                    activity_id=activity["id"],
+                    destination_id=destination_id,
+                    city_center=dest_coords,
+                    city_radius_km=city_radius_km
+                )
+
+                # Assign to activity
+                activity["location"]["coordinates"] = dispersed["coordinates"]
+                activity["location"]["coordinates_precision"] = dispersed["precision"]
+                activity["location"]["coordinates_source"] = dispersed["source"]
+                activity["location"]["_dispersion_metadata"] = {
+                    "offset_km": dispersed["offset_km"],
+                    "angle_degrees": dispersed["angle_degrees"],
+                    "city_radius_km": city_radius_km
+                }
+
+                logger.info(
+                    f"[LEVEL 4] Dispersed {activity['id']}: "
+                    f"{dispersed['offset_km']}km at {dispersed['angle_degrees']}° from center"
+                )
+                dispersed_count += 1
+
+            logger.info(f"[LEVEL 4] Dispersed {dispersed_count}/{len(candidates)} activities")
+
+        except Exception as e:
+            logger.error(f"[LEVEL 4] Error during dispersion: {e}", exc_info=True)
+            # Don't fail - activities without coords will be returned as-is
 
     async def _resolve_tag_names(self, activities: list[dict], language: str = "en"):
         """

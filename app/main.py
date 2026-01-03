@@ -35,6 +35,8 @@ from app.services.destinations_sync import DestinationsSyncService
 from app.repositories.activities_repository import ActivitiesRepository
 from app.repositories.destinations_repository import DestinationsRepository
 from app.repositories.tags_repository import TagsRepository
+from app.repositories.attractions_repository import AttractionsRepository
+from app.repositories.geocoding_cache_repository import GeocodingCacheRepository
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
@@ -142,6 +144,16 @@ async def startup_event() -> None:
         app.state.tags_repo = TagsRepository(tags_collection)
         await app.state.tags_repo.create_indexes()
 
+        # Initialize attractions repository
+        attractions_collection = mongo_db[settings.mongodb_collection_attractions]
+        app.state.attractions_repo = AttractionsRepository(attractions_collection)
+        await app.state.attractions_repo.create_indexes()
+
+        # Initialize geocoding cache repository
+        geocoding_cache_collection = mongo_db[settings.mongodb_collection_geocoding_cache]
+        app.state.geocoding_cache_repo = GeocodingCacheRepository(geocoding_cache_collection)
+        await app.state.geocoding_cache_repo.create_indexes()
+
         # Initialize destinations sync service
         app.state.destinations_sync_service = DestinationsSyncService(
             viator_destinations=app.state.viator_destinations_service,
@@ -159,6 +171,8 @@ async def startup_event() -> None:
             redis_cache=app.state.redis_cache,
             activities_repo=app.state.activities_repo,
             tags_repo=app.state.tags_repo,
+            attractions_repo=app.state.attractions_repo,
+            geocoding_cache_repo=app.state.geocoding_cache_repo,
             location_resolver=app.state.location_resolver,
             cache_ttl=settings.cache_ttl_activities_search
         )
@@ -171,6 +185,8 @@ async def startup_event() -> None:
         app.state.activities_repo = None
         app.state.destinations_repo = None
         app.state.tags_repo = None
+        app.state.attractions_repo = None
+        app.state.geocoding_cache_repo = None
         app.state.destinations_sync_service = None
         app.state.location_resolver = None
         app.state.activities_service = None

@@ -25,9 +25,16 @@ class SortOrder(str, Enum):
 
 
 class SearchType(str, Enum):
-    """Type of search to perform."""
+    """Type of search to perform (deprecated - use SearchMode)."""
     ACTIVITIES = "activities"
     ATTRACTIONS = "attractions"
+
+
+class SearchMode(str, Enum):
+    """Search mode for unified search."""
+    ACTIVITIES = "activities"
+    ATTRACTIONS = "attractions"
+    BOTH = "both"  # Return both activities and attractions mixed
 
 
 # ============================================================================
@@ -38,7 +45,7 @@ class GeoInput(BaseModel):
     """Geographic coordinates input."""
     lat: float = Field(..., ge=-90, le=90)
     lon: float = Field(..., ge=-180, le=180)
-    radius_km: float = Field(default=50, ge=1, le=200)
+    radius_km: float = Field(default=50, ge=1, le=50, description="Search radius in km (max 50km)")
 
 
 class LocationInput(BaseModel):
@@ -96,7 +103,8 @@ class Pagination(BaseModel):
 
 class ActivitySearchRequest(BaseModel):
     """Request model for activity search."""
-    search_type: SearchType = Field(default=SearchType.ACTIVITIES, description="Type of search: activities or attractions")
+    search_type: SearchType = Field(default=SearchType.ACTIVITIES, description="Type of search: activities or attractions (deprecated)")
+    search_mode: SearchMode = Field(default=SearchMode.BOTH, description="Search mode: activities, attractions, or both mixed")
     location: LocationInput
     dates: DateRange
     filters: Optional[ActivityFilters] = None
@@ -149,7 +157,9 @@ class ActivityLocation(BaseModel):
     destination: str
     country: str
     coordinates: Optional[dict] = None
-    coordinates_precision: Optional[str] = None  # "precise" | "destination" | null
+    coordinates_precision: Optional[str] = None  # "precise" | "attraction" | "geocoded" | "dispersed" | null
+    coordinates_source: Optional[str] = None  # Source of coordinates (e.g., "viator_logistics", "attraction_12345", "geoapify", "deterministic_hash")
+    _dispersion_metadata: Optional[dict] = None  # Internal: {"offset_km": float, "angle_degrees": int, "city_radius_km": float}
 
 
 class Activity(BaseModel):
@@ -167,6 +177,9 @@ class Activity(BaseModel):
     confirmation_type: str
     location: ActivityLocation
     availability: str = "available"
+    type: Optional[str] = Field(None, description="Type: 'activity' or 'attraction'")
+    product_codes: Optional[List[str]] = Field(None, description="Related product codes (for attractions)")
+    distance_from_search: Optional[float] = Field(None, description="Distance in km from search coordinates (for geo searches)")
 
 
 class SearchResults(BaseModel):
@@ -184,6 +197,7 @@ class LocationResolution(BaseModel):
     coordinates: Optional[dict] = None
     match_score: Optional[float] = None
     distance_km: Optional[float] = None
+    search_type: Optional[str] = Field(None, description="Type of search performed: 'city' or 'geo'")
 
 
 class CacheInfo(BaseModel):
@@ -191,6 +205,7 @@ class CacheInfo(BaseModel):
     cached: bool
     cached_at: Optional[str] = None
     expires_at: Optional[str] = None
+    cursor_id: Optional[str] = Field(None, description="Cursor ID for stateful pagination (unified search)")
 
 
 class ActivitySearchResponse(BaseModel):
