@@ -311,75 +311,94 @@ class ActivitiesService:
             products_details = valid_details
             logger.info(f"[ENRICH] Fetched {len(products_details)} product details")
             
-            # Map product_code -> location_refs
+            # Map product_code -> location_refs AND resolved coords
             product_refs_map = {}
-            all_refs = set()
+            resolved_coords_map = {} # Key: ref -> coords
+            product_direct_coords_map = {} # Key: product_code -> coords (for locs with no ref)
+            all_refs_to_fetch = set()
             
             for prod in products_details:
-                refs = ViatorMapper.extract_location_refs(prod)
+                # NEW: Extract full location info (ref + coords)
+                locs = ViatorMapper.extract_product_locations(prod)
+                
+                # Store refs for potential lookup
+                refs = [l["ref"] for l in locs if l["ref"]]
                 if refs:
                     product_refs_map[prod["productCode"]] = refs
-                    all_refs.update(refs)
-                else:
-                    logger.debug(f"[ENRICH] No refs found for product {prod.get('productCode')}")
-            
-            logger.info(f"[ENRICH] Found {len(all_refs)} unique location refs")
-            if not all_refs:
-                return
+                
+                # Check directly extracted coords
+                for loc in locs:
+                    coords = None
+                    if loc["lat"] and loc["lon"]:
+                        coords = {"lat": loc["lat"], "lon": loc["lon"]}
+                    
+                    if coords:
+                        if loc["ref"]:
+                            resolved_coords_map[loc["ref"]] = coords
+                        elif prod["productCode"] not in product_direct_coords_map:
+                            # If no ref but have coords, assign to product directly (first one wins)
+                            product_direct_coords_map[prod["productCode"]] = coords
+                    elif loc["ref"]:
+                        # No coords, but have ref -> needs fetch
+                        all_refs_to_fetch.add(loc["ref"])
 
-            # Step 2: Bulk fetch location details to get coordinates
-            # Note: /locations/bulk likely also returns 403, so we use parallel individual fetches
-            logger.info(f"[ENRICH] Fetching details for {len(all_refs)} locations in parallel")
-            tasks = [
-                self.viator_client.get_location_details(ref)
-                for ref in all_refs
-            ]
-            locations_details = await asyncio.gather(*tasks, return_exceptions=True)
+            # Filter out refs we already resolved locally
+            refs_needed = [r for r in all_refs_to_fetch if r not in resolved_coords_map]
+            
+            logger.info(f"[ENRICH] Resolved {len(resolved_coords_map)} refs locally + {len(product_direct_coords_map)} direct products. Need to fetch {len(refs_needed)} refs.")
 
-            # Filter out exceptions
-            valid_locs = []
-            for res in locations_details:
-                if isinstance(res, Exception):
-                    logger.warning(f"[ENRICH] Failed to fetch location details: {res}")
-                elif res:
-                    valid_locs.append(res)
+            if refs_needed:
+                # Step 2: Bulk fetch location details to get coordinates (only for missing ones)
+                # We use the corrected endpoint /partner/locations/bulk via get_bulk_locations
+                logger.info(f"[ENRICH] Fetching details for {len(refs_needed)} locations via bulk API")
+                try:
+                    locations_details = await self.viator_client.get_bulk_locations(list(refs_needed))
+                    logger.info(f"[ENRICH] Fetched {len(locations_details)} location details from API")
+                    
+                    for loc in locations_details:
+                        # Check for direct center
+                        center = loc.get("center")
+                        if not center and "location" in loc:
+                            center = loc["location"].get("center")
+                        
+                        if center:
+                            resolved_coords_map[loc["reference"]] = {
+                                "lat": center.get("latitude"),
+                                "lon": center.get("longitude")
+                            }
+                except Exception as e:
+                    logger.error(f"[ENRICH] Bulk location fetch failed: {e}")
+                    # Fallback or just continue with what we have
+
             
-            locations_details = valid_locs
-            logger.info(f"[ENRICH] Fetched {len(locations_details)} location details")
-            
-            # Map ref -> {lat, lon}
-            ref_coords_map = {}
-            for loc in locations_details:
-                # Singular endpoint returns the location object directly, unlike bulk which wraps in "locations" list or similar
-                # We need to verify the response structure for singular /locations/{ref}.
-                # Documentation says it returns the Location object.
-                center = loc.get("center")
-                if center:
-                    ref_coords_map[loc["reference"]] = {
-                        "lat": center.get("latitude"),
-                        "lon": center.get("longitude")
-                    }
-            
-            logger.info(f"[ENRICH] Mapped {len(ref_coords_map)} locations to coordinates")
+            logger.info(f"[ENRICH] Total mapped locations: {len(resolved_coords_map)}")
             
             # Step 3: Assign coordinates to activities
             enriched_count = 0
-            # We take the first valid coordinate found for a product's refs
             for activity in candidates:
                 p_code = activity["id"]
-                refs = product_refs_map.get(p_code, [])
                 
+                # 1. Check direct product coords (highest priority if specific to this product)
+                direct_coords = product_direct_coords_map.get(p_code)
+                if direct_coords:
+                    activity["location"]["coordinates"] = direct_coords
+                    logger.info(f"Enriched activity {p_code} with direct coordinates: {direct_coords}")
+                    enriched_count += 1
+                    continue
+
+                # 2. Check via Refs
+                refs = product_refs_map.get(p_code, [])
                 for ref in refs:
-                    coords = ref_coords_map.get(ref)
+                    coords = resolved_coords_map.get(ref)
                     if coords:
-                        # Found a valid coordinate! Update activity.
-                        # Note: We prioritize Start Points which are usually first in extract_location_refs
                         activity["location"]["coordinates"] = coords
-                        logger.info(f"Enriched activity {p_code} with coordinates: {coords}")
+                        logger.info(f"Enriched activity {p_code} with ref-resolved coordinates: {coords}")
                         enriched_count += 1
                         break
             
             logger.info(f"[ENRICH] Total enriched: {enriched_count}/{len(candidates)}")
+            
+
                         
         except Exception as e:
             logger.error(f"Error enriching activities with locations: {e}", exc_info=True)

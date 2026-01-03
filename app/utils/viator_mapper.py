@@ -141,48 +141,70 @@ class ViatorMapper:
         return [f"tag_{tag_id}" for tag_id in tags[:5]]
 
     @staticmethod
-    def extract_location_refs(product: dict) -> list[str]:
+    def extract_product_locations(product: dict) -> list[dict]:
         """
-        Extract location reference codes from product details.
-        
-        Look for:
-        - logistics.start.location.ref
-        - logistics.end.location.ref
-        - itinerary.pointsOfInterest[].location.ref
+        Extract location info (ref + coords if available) from product details.
         
         Args:
             product: Product details from Viator API
             
         Returns:
-            List of location reference codes
+            List of dicts: {"ref": str, "lat": float, "lon": float}
         """
-        refs = set()
+        locations = []
+        seen_refs = set()
         
+        def _add_loc(obj):
+            loc_data = obj.get("location", {})
+            ref = loc_data.get("ref")
+            
+            # Check for coordinates in various common places
+            # 1. Direct in location object
+            lat = loc_data.get("latitude") or loc_data.get("lat")
+            lon = loc_data.get("longitude") or loc_data.get("lon")
+            
+            # 2. In 'center' sub-object
+            if not lat:
+                center = loc_data.get("center", {})
+                lat = center.get("latitude") or center.get("lat")
+                lon = center.get("longitude") or center.get("lon")
+                
+            if not ref and not (lat and lon):
+                return
+
+            if ref in seen_refs:
+                return
+            
+            if ref:
+                seen_refs.add(ref)
+            
+            locations.append({
+                "ref": ref,
+                "lat": lat,
+                "lon": lon
+            })
+
         # Check logistics start/end
         logistics = product.get("logistics", {})
-        
-        # Start points
         for start_point in logistics.get("start", []):
-            ref = ViatorMapper._get_location_ref(start_point)
-            if ref:
-                refs.add(ref)
-                
-        # End points
+            _add_loc(start_point)
         for end_point in logistics.get("end", []):
-            ref = ViatorMapper._get_location_ref(end_point)
-            if ref:
-                refs.add(ref)
+            _add_loc(end_point)
                 
         # Check itinerary points of interest
         itinerary = product.get("itinerary", {})
         for day in itinerary.get("days", []):
             for item in day.get("items", []):
                 point_of_interest = item.get("pointOfInterest", {})
-                ref = ViatorMapper._get_location_ref(point_of_interest)
-                if ref:
-                    refs.add(ref)
+                _add_loc(point_of_interest)
                     
-        return list(refs)
+        return locations
+
+    @staticmethod
+    def extract_location_refs(product: dict) -> list[str]:
+        """Legacy wrapper - use extract_product_locations instead."""
+        locs = ViatorMapper.extract_product_locations(product)
+        return [l["ref"] for l in locs if l.get("ref")]
 
     @staticmethod
     def _get_location_ref(obj: dict) -> Optional[str]:

@@ -165,7 +165,7 @@ class ViatorClient:
         logger.info(f"Fetching bulk locations for {len(location_refs)} refs")
         
         response = await self.post(
-            "/locations/bulk",
+            "/partner/locations/bulk",
             json_data={"locations": location_refs}
         )
         
