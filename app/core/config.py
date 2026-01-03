@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     cache_ttl_categories: int = Field(2592000, description="30 days")
     cache_ttl_locations: int = Field(2592000, description="30 days - Viator location coordinates")
 
+    # Feature Flags
+    enable_geocoding: bool = Field(False, description="Enable LEVEL 3 geocoding enrichment (Geoapify + Google Places)", alias="ENABLE_GEOCODING")
+
 
 class SourceMeta(BaseModel):
     name: str

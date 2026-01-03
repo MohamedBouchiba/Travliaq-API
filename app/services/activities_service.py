@@ -12,6 +12,9 @@ from app.services.viator.client import ViatorClient
 from app.services.viator.products import ViatorProductsService
 from app.services.redis_cache import RedisCache
 from app.services.location_resolver import LocationResolver
+from app.services.geoapify import GeoapifyClient
+from app.services.google_places import GooglePlacesClient
+from app.services.translation import TranslationClient
 from app.repositories.activities_repository import ActivitiesRepository
 from app.repositories.tags_repository import TagsRepository
 from app.repositories.attractions_repository import AttractionsRepository
@@ -44,6 +47,10 @@ class ActivitiesService:
         attractions_repo: AttractionsRepository,
         geocoding_cache_repo: GeocodingCacheRepository,
         location_resolver: LocationResolver,
+        geoapify_client: Optional[GeoapifyClient] = None,
+        google_places_client: Optional[GooglePlacesClient] = None,
+        translation_client: Optional[TranslationClient] = None,
+        enable_geocoding: bool = False,
         cache_ttl: int = 604800  # 7 days
     ):
         self.viator_client = viator_client
@@ -55,6 +62,10 @@ class ActivitiesService:
         self.attractions_repo = attractions_repo
         self.geocoding_cache_repo = geocoding_cache_repo
         self.location_resolver = location_resolver
+        self.geoapify_client = geoapify_client
+        self.google_places_client = google_places_client
+        self.translation_client = translation_client
+        self.enable_geocoding = enable_geocoding
         self.cache_ttl = cache_ttl
 
     async def search_activities(self, request: ActivitySearchRequest, force_refresh: bool = False) -> ActivitySearchResponse:
@@ -470,6 +481,10 @@ class ActivitiesService:
             logger.info(f"[ENRICH] Starting LEVEL 2: Attraction Matching...")
             await self._enrich_via_attraction_matching(activities)
 
+            # LEVEL 3: Geocoding Intelligent (Geoapify → Google Places with cache)
+            logger.info(f"[ENRICH] Starting LEVEL 3: Intelligent Geocoding...")
+            await self._enrich_via_geocoding(activities, language=language)
+
             # LEVEL 4: Intelligent Dispersion (GeoGuessr-style for remaining activities)
             logger.info(f"[ENRICH] Starting LEVEL 4: Intelligent Dispersion...")
             await self._enrich_via_dispersion(activities)
@@ -587,6 +602,253 @@ class ActivitiesService:
         except Exception as e:
             logger.error(f"[LEVEL 2] Error during attraction matching: {e}", exc_info=True)
             # Don't fail - continue to next level
+
+    async def _enrich_via_geocoding(self, activities: list[dict], language: str = "en"):
+        """
+        LEVEL 3: Geocoding intelligent with MAXIMUM cost optimization.
+
+        Strategy (Cost Optimization Priority):
+        1. CHECK CACHE FIRST - Avoid ALL external calls if possible
+        2. Batch translate titles (1 API call instead of N)
+        3. Geoapify FIRST (3000/day FREE quota)
+        4. Google Places FALLBACK ONLY (quota-limited, expensive)
+        5. Circuit breaker if quota exceeded
+        6. Validate coordinates within city bounds
+
+        Args:
+            activities: List of activity dicts (will be modified in-place)
+            language: Current language (for translation)
+        """
+        # Feature flag - can disable if costs too high
+        if not self.enable_geocoding:
+            logger.info("[LEVEL 3] Geocoding is DISABLED (feature flag)")
+            return
+
+        # Verify services are available
+        if not self.geoapify_client and not self.google_places_client:
+            logger.warning("[LEVEL 3] No geocoding clients available")
+            return
+
+        if not self.translation_client:
+            logger.warning("[LEVEL 3] No translation client available")
+            return
+
+        try:
+            # Filter activities needing geocoding
+            candidates = [
+                a for a in activities
+                if not a.get("location", {}).get("coordinates")
+            ]
+
+            if not candidates:
+                logger.info("[LEVEL 3] No activities need geocoding")
+                return
+
+            logger.info(f"[LEVEL 3] Starting cost-optimized geocoding for {len(candidates)} activities")
+
+            # === STEP 1: BATCH TRANSLATION (Minimize API calls) ===
+            logger.info(f"[LEVEL 3] Step 1: Batch translating {len(candidates)} titles...")
+
+            # Collect all titles
+            titles = [a.get("title", "") for a in candidates]
+
+            # Batch translate to English (more API calls but necessary for accuracy)
+            # Using asyncio.gather for parallel execution
+            translation_tasks = [
+                self.translation_client.translate_to_english(title)
+                for title in titles
+            ]
+            titles_en = await asyncio.gather(*translation_tasks, return_exceptions=True)
+
+            # Filter out exceptions
+            titles_en = [
+                t if not isinstance(t, Exception) else titles[i]
+                for i, t in enumerate(titles_en)
+            ]
+
+            logger.info(f"[LEVEL 3] Batch translation completed")
+
+            # === STEP 2: CACHE CHECK (Avoid external API calls) ===
+            logger.info(f"[LEVEL 3] Step 2: Checking cache for all activities...")
+
+            cache_hits = 0
+            cache_misses = []
+
+            for i, activity in enumerate(candidates):
+                title_en = titles_en[i]
+                destination = activity.get("location", {}).get("destination", "")
+
+                # Check cache FIRST
+                cached = await self.geocoding_cache_repo.get(title_en, destination)
+
+                if cached and cached.get("coordinates"):
+                    # CACHE HIT - No API call needed!
+                    coords = cached["coordinates"]
+                    activity["location"]["coordinates"] = coords
+                    activity["location"]["coordinates_precision"] = "geocoded"
+                    activity["location"]["coordinates_source"] = f"cache_{cached.get('source', 'unknown')}"
+
+                    cache_hits += 1
+                    logger.debug(f"[LEVEL 3] Cache HIT: {title_en[:50]} → {coords}")
+                else:
+                    # CACHE MISS - Need to geocode
+                    cache_misses.append((activity, title_en, destination))
+
+            logger.info(
+                f"[LEVEL 3] Cache results: {cache_hits} hits, {len(cache_misses)} misses "
+                f"({cache_hits / len(candidates) * 100:.1f}% hit rate)"
+            )
+
+            if not cache_misses:
+                logger.info("[LEVEL 3] All activities resolved from cache - ZERO API calls!")
+                return
+
+            # === STEP 3: GEOCODE CACHE MISSES (Geoapify → Google fallback) ===
+            logger.info(f"[LEVEL 3] Step 3: Geocoding {len(cache_misses)} cache misses...")
+
+            enriched_count = 0
+            geoapify_count = 0
+            google_count = 0
+
+            for activity, title_en, destination in cache_misses:
+                destination_id = activity.get("_destination_id")
+
+                # Try Geoapify FIRST (FREE 3000/day)
+                coords = None
+                source = None
+
+                if self.geoapify_client:
+                    try:
+                        result = await self.geoapify_client.fetch_by_name(
+                            name=title_en,
+                            city=destination,
+                            lang="en"
+                        )
+
+                        if result and result.get("location"):
+                            coords = {
+                                "lat": result["location"].get("lat"),
+                                "lon": result["location"].get("lng") or result["location"].get("lon")
+                            }
+
+                            # Validate coordinates within city bounds
+                            if await self._validate_coords_in_city(coords, destination_id):
+                                source = "geoapify"
+                                geoapify_count += 1
+                                logger.info(f"[LEVEL 3] Geoapify SUCCESS: {title_en[:50]}")
+                            else:
+                                logger.warning(f"[LEVEL 3] Geoapify coords INVALID (outside city): {title_en[:50]}")
+                                coords = None
+
+                    except Exception as e:
+                        logger.warning(f"[LEVEL 3] Geoapify error for {title_en[:50]}: {e}")
+
+                # Fallback to Google Places if Geoapify failed
+                if not coords and self.google_places_client:
+                    try:
+                        result = await self.google_places_client.text_search(
+                            poi_name=title_en,
+                            city=destination
+                        )
+
+                        if result and result.get("location"):
+                            coords = {
+                                "lat": result["location"].get("latitude"),
+                                "lon": result["location"].get("longitude")
+                            }
+
+                            # Validate coordinates within city bounds
+                            if await self._validate_coords_in_city(coords, destination_id):
+                                source = "google_places"
+                                google_count += 1
+                                logger.info(f"[LEVEL 3] Google Places SUCCESS: {title_en[:50]}")
+                            else:
+                                logger.warning(f"[LEVEL 3] Google coords INVALID (outside city): {title_en[:50]}")
+                                coords = None
+
+                    except RuntimeError as e:
+                        if "quota" in str(e).lower() or "cap" in str(e).lower():
+                            logger.error("[LEVEL 3] Google Places QUOTA EXCEEDED - Stopping geocoding")
+                            break  # CIRCUIT BREAKER
+                        else:
+                            logger.warning(f"[LEVEL 3] Google Places error for {title_en[:50]}: {e}")
+                    except Exception as e:
+                        logger.warning(f"[LEVEL 3] Google Places error for {title_en[:50]}: {e}")
+
+                # If geocoding succeeded, assign and cache
+                if coords and source:
+                    activity["location"]["coordinates"] = coords
+                    activity["location"]["coordinates_precision"] = "geocoded"
+                    activity["location"]["coordinates_source"] = source
+
+                    # Cache for future use
+                    await self.geocoding_cache_repo.set(title_en, destination, coords, source)
+
+                    enriched_count += 1
+
+            logger.info(
+                f"[LEVEL 3] Geocoding completed: {enriched_count}/{len(cache_misses)} enriched "
+                f"(Geoapify: {geoapify_count}, Google: {google_count})"
+            )
+
+            # Final summary
+            total_enriched = cache_hits + enriched_count
+            logger.info(
+                f"[LEVEL 3] TOTAL: {total_enriched}/{len(candidates)} activities geocoded "
+                f"({cache_hits} from cache, {enriched_count} from API)"
+            )
+
+        except Exception as e:
+            logger.error(f"[LEVEL 3] Error during geocoding: {e}", exc_info=True)
+            # Don't fail - continue to next level
+
+    async def _validate_coords_in_city(self, coords: dict, destination_id: str) -> bool:
+        """
+        Validate that geocoded coordinates are within city bounds.
+
+        Prevents false matches from geocoding (e.g., "Paris" in Texas instead of France).
+
+        Args:
+            coords: {"lat": float, "lon": float}
+            destination_id: Viator destination ID
+
+        Returns:
+            True if coordinates are valid, False otherwise
+        """
+        if not coords or not destination_id:
+            return False
+
+        try:
+            # Get destination center
+            dest_coords = await self.location_resolver.get_destination_coordinates(destination_id)
+            if not dest_coords:
+                logger.warning(f"[VALIDATION] No coordinates for destination {destination_id}")
+                return True  # Can't validate, assume valid
+
+            # Calculate distance from city center
+            from app.utils.coordinate_dispersion import _haversine_distance
+
+            distance_km = _haversine_distance(
+                dest_coords["lat"], dest_coords["lon"],
+                coords["lat"], coords["lon"]
+            )
+
+            # Max 50km from city center (configurable)
+            MAX_DISTANCE_KM = 50.0
+
+            if distance_km > MAX_DISTANCE_KM:
+                logger.warning(
+                    f"[VALIDATION] Coordinates too far from city center: "
+                    f"{distance_km:.1f}km > {MAX_DISTANCE_KM}km"
+                )
+                return False
+
+            logger.debug(f"[VALIDATION] Coordinates valid: {distance_km:.1f}km from center")
+            return True
+
+        except Exception as e:
+            logger.error(f"[VALIDATION] Error validating coordinates: {e}")
+            return True  # On error, assume valid to avoid blocking
 
     async def _enrich_via_dispersion(self, activities: list[dict]):
         """

@@ -174,6 +174,10 @@ async def startup_event() -> None:
             attractions_repo=app.state.attractions_repo,
             geocoding_cache_repo=app.state.geocoding_cache_repo,
             location_resolver=app.state.location_resolver,
+            geoapify_client=geoapify_client,
+            google_places_client=google_client,
+            translation_client=translation_client,
+            enable_geocoding=settings.enable_geocoding,
             cache_ttl=settings.cache_ttl_activities_search
         )
     else:
