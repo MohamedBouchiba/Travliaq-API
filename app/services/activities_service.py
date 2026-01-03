@@ -34,6 +34,7 @@ class ActivitiesService:
         self,
         viator_client: ViatorClient,
         viator_products: ViatorProductsService,
+        viator_attractions,  # ViatorAttractionsService
         redis_cache: RedisCache,
         activities_repo: ActivitiesRepository,
         tags_repo: TagsRepository,
@@ -42,6 +43,7 @@ class ActivitiesService:
     ):
         self.viator_client = viator_client
         self.viator_products = viator_products
+        self.viator_attractions = viator_attractions
         self.cache = redis_cache
         self.repo = activities_repo
         self.tags_repo = tags_repo
@@ -101,21 +103,48 @@ class ActivitiesService:
 
         logger.info(f"Cache MISS for activities search")
 
-        # 3. Call Viator API
-        viator_response = await self._call_viator_search(destination_id, request)
+        # 3. Call Viator API (conditional based on search_type)
+        from app.models.activities import SearchType
 
-        # 4. Transform response
-        activities = [
-            ViatorMapper.map_product_summary(product)
-            for product in viator_response.get("products", [])
-        ]
+        if request.search_type == SearchType.ATTRACTIONS:
+            # NEW FLOW: Search attractions (have direct coordinates!)
+            logger.info(f"Searching ATTRACTIONS for destination {destination_id}")
 
-        logger.info(f"Transformed {len(activities)} activities from Viator response")
+            viator_response = await self.viator_attractions.search_attractions(
+                destination_id=destination_id,
+                sort=request.sorting.sort_by.value.upper() if request.sorting and request.sorting.sort_by.value != "default" else "DEFAULT",
+                start=(request.pagination.page - 1) * request.pagination.limit + 1,
+                count=request.pagination.limit,
+                language=request.language
+            )
 
-        # 4.5 Enrich with locations (New Step)
-        logger.info(f"Starting location enrichment for {len(activities)} activities...")
-        await self._enrich_activities_with_locations(activities, language=request.language)
-        logger.info(f"Location enrichment completed")
+            # 4. Transform attractions
+            activities = [
+                ViatorMapper.map_attraction(attraction)
+                for attraction in viator_response.get("attractions", [])
+            ]
+
+            logger.info(f"Transformed {len(activities)} attractions from Viator response")
+            # NO ENRICHMENT NEEDED - attractions have direct coordinates!
+
+        else:  # SearchType.ACTIVITIES (default)
+            # EXISTING FLOW: Search products/activities
+            logger.info(f"Searching ACTIVITIES for destination {destination_id}")
+
+            viator_response = await self._call_viator_search(destination_id, request)
+
+            # 4. Transform response
+            activities = [
+                ViatorMapper.map_product_summary(product)
+                for product in viator_response.get("products", [])
+            ]
+
+            logger.info(f"Transformed {len(activities)} activities from Viator response")
+
+            # 4.5 Enrich with locations (New Step - ONLY for activities)
+            logger.info(f"Starting location enrichment for {len(activities)} activities...")
+            await self._enrich_activities_with_locations(activities, language=request.language)
+            logger.info(f"Location enrichment completed")
 
         # 5. Persist in MongoDB (async, non-blocking)
         await self._persist_activities(activities)

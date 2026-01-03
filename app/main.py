@@ -27,6 +27,7 @@ from app.services.translation import TranslationClient
 from app.services.wikidata import WikidataClient
 from app.services.viator.client import ViatorClient
 from app.services.viator.products import ViatorProductsService
+from app.services.viator.attractions import ViatorAttractionsService
 from app.services.viator.destinations import ViatorDestinationsService
 from app.services.activities_service import ActivitiesService
 from app.services.location_resolver import LocationResolver
@@ -123,6 +124,7 @@ async def startup_event() -> None:
 
         app.state.viator_products = ViatorProductsService(app.state.viator_client)
         app.state.viator_destinations_service = ViatorDestinationsService(app.state.viator_client)
+        app.state.viator_attractions = ViatorAttractionsService(app.state.viator_client)
 
         # Initialize activities repository
         mongo_db = app.state.mongo_manager.client[settings.mongodb_db]
@@ -153,6 +155,7 @@ async def startup_event() -> None:
         app.state.activities_service = ActivitiesService(
             viator_client=app.state.viator_client,
             viator_products=app.state.viator_products,
+            viator_attractions=app.state.viator_attractions,
             redis_cache=app.state.redis_cache,
             activities_repo=app.state.activities_repo,
             tags_repo=app.state.tags_repo,
@@ -164,6 +167,7 @@ async def startup_event() -> None:
         app.state.viator_client = None
         app.state.viator_products = None
         app.state.viator_destinations_service = None
+        app.state.viator_attractions = None
         app.state.activities_repo = None
         app.state.destinations_repo = None
         app.state.tags_repo = None

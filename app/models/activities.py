@@ -24,6 +24,12 @@ class SortOrder(str, Enum):
     DESC = "desc"
 
 
+class SearchType(str, Enum):
+    """Type of search to perform."""
+    ACTIVITIES = "activities"
+    ATTRACTIONS = "attractions"
+
+
 # ============================================================================
 # INPUT MODELS (REQUEST)
 # ============================================================================
@@ -90,6 +96,7 @@ class Pagination(BaseModel):
 
 class ActivitySearchRequest(BaseModel):
     """Request model for activity search."""
+    search_type: SearchType = Field(default=SearchType.ACTIVITIES, description="Type of search: activities or attractions")
     location: LocationInput
     dates: DateRange
     filters: Optional[ActivityFilters] = None

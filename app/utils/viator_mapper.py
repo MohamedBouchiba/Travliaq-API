@@ -101,6 +101,95 @@ class ViatorMapper:
         }
 
     @staticmethod
+    def map_attraction(attraction: dict) -> dict:
+        """
+        Transform Viator Attraction to simplified Activity format.
+
+        Args:
+            attraction: Attraction from Viator /attractions/search API
+
+        Returns:
+            Simplified activity dict compatible with existing format
+
+        Note:
+            - Attractions have DIRECT coordinates in center{latitude, longitude}
+            - They don't have pricing (show related products instead)
+            - They have addresses (street-level)
+        """
+        # Extract coordinates (DIRECT - NO ENRICHMENT NEEDED!)
+        center = attraction.get("center", {})
+        coordinates = None
+        if center.get("latitude") and center.get("longitude"):
+            coordinates = {
+                "lat": center["latitude"],
+                "lon": center["longitude"]
+            }
+            logger.info(f"Attraction {attraction.get('attractionId')}: Direct coords: {coordinates}")
+
+        # Extract address
+        address = attraction.get("address", {})
+
+        # Extract images
+        images = []
+        for img_variant in attraction.get("images", []):
+            images.append({
+                "url": img_variant.get("url", ""),
+                "is_cover": len(images) == 0,  # First image is cover
+                "variants": {
+                    "large": img_variant.get("url", "")
+                }
+            })
+
+        # Extract unique content (description)
+        viator_content = attraction.get("viatorUniqueContent", {})
+        description = viator_content.get("shortDescription", "")
+
+        # Extract reviews
+        reviews = attraction.get("reviews", {})
+        rating = {
+            "average": reviews.get("combinedAverageRating", 0),
+            "count": reviews.get("totalReviews", 0)
+        }
+
+        # Build location with DIRECT coordinates
+        location = {
+            "destination": address.get("city", "Unknown"),
+            "country": "Unknown",  # Not in API response
+            "coordinates": coordinates,  # ✅ DIRECT COORDINATES
+            "address": address.get("street")
+        }
+
+        # Build simplified activity (compatible format)
+        return {
+            "id": f"ATT-{attraction.get('attractionId')}",  # Prefix to differentiate
+            "title": attraction.get("name", ""),
+            "description": description,
+            "images": images,
+            "pricing": {
+                "from_price": None,  # Attractions don't have direct pricing
+                "currency": "EUR",
+                "original_price": None,
+                "is_discounted": False
+            },
+            "rating": rating,
+            "duration": {
+                "minutes": 0,
+                "formatted": "Flexible"
+            },
+            "categories": ["attraction"],
+            "flags": [],
+            "booking_url": attraction.get("attractionUrl", ""),
+            "confirmation_type": "INSTANT",  # Attractions are instant (they're places, not bookings)
+            "location": location,
+            "availability": "available",
+            # Extra fields specific to attractions
+            "product_codes": attraction.get("productCodes", []),  # Related activities
+            "type": "attraction",  # Flag to differentiate from activities
+            "free_attraction": attraction.get("freeAttraction", False),
+            "opening_hours": attraction.get("openingHours")
+        }
+
+    @staticmethod
     def _format_duration(minutes: int) -> str:
         """Format duration in minutes to human-readable string."""
         if minutes == 0:
