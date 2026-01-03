@@ -168,8 +168,10 @@ class GeocodingCacheRepository:
 
         # TTL index on last_used - auto-delete after 90 days of inactivity
         # This also serves as a regular index for queries
+        # Using explicit name to avoid conflict with existing indexes
         await self.collection.create_index(
             "last_used",
+            name="last_used_ttl",  # Explicit name to avoid conflicts
             expireAfterSeconds=90 * 24 * 60 * 60  # 90 days
         )
 
