@@ -350,22 +350,31 @@ class ActivitiesService:
             if refs_needed:
                 # Step 2: Bulk fetch location details to get coordinates (only for missing ones)
                 # We use the corrected endpoint /partner/locations/bulk via get_bulk_locations
+                # IMPORTANT: Viator API has a limit of 500 location refs per request
                 logger.info(f"[ENRICH] Fetching details for {len(refs_needed)} locations via bulk API")
+
+                # Chunk refs into batches of 500 (Viator API limit)
+                CHUNK_SIZE = 500
+                refs_chunks = [refs_needed[i:i+CHUNK_SIZE] for i in range(0, len(refs_needed), CHUNK_SIZE)]
+                logger.info(f"[ENRICH] Split into {len(refs_chunks)} chunks of max {CHUNK_SIZE} refs")
+
                 try:
-                    locations_details = await self.viator_client.get_bulk_locations(list(refs_needed))
-                    logger.info(f"[ENRICH] Fetched {len(locations_details)} location details from API")
-                    
-                    for loc in locations_details:
-                        # Check for direct center
-                        center = loc.get("center")
-                        if not center and "location" in loc:
-                            center = loc["location"].get("center")
-                        
-                        if center:
-                            resolved_coords_map[loc["reference"]] = {
-                                "lat": center.get("latitude"),
-                                "lon": center.get("longitude")
-                            }
+                    for chunk_idx, chunk in enumerate(refs_chunks):
+                        logger.info(f"[ENRICH] Fetching chunk {chunk_idx+1}/{len(refs_chunks)} ({len(chunk)} refs)")
+                        locations_details = await self.viator_client.get_bulk_locations(list(chunk))
+                        logger.info(f"[ENRICH] Fetched {len(locations_details)} location details from chunk {chunk_idx+1}")
+
+                        for loc in locations_details:
+                            # Check for direct center
+                            center = loc.get("center")
+                            if not center and "location" in loc:
+                                center = loc["location"].get("center")
+
+                            if center:
+                                resolved_coords_map[loc["reference"]] = {
+                                    "lat": center.get("latitude"),
+                                    "lon": center.get("longitude")
+                                }
                 except Exception as e:
                     logger.error(f"[ENRICH] Bulk location fetch failed: {e}")
                     # Fallback or just continue with what we have

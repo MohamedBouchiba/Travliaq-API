@@ -51,7 +51,7 @@ class ViatorTaxonomyService:
 
         try:
             response = await self.client.get(
-                "/products/tags",
+                "/partner/products/tags",
                 params={},
                 language=language
             )

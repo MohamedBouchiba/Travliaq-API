@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     viator_api_key_dev: str = Field("", alias="VIATOR_API_KEY_DEV")
     viator_api_key_prod: str = Field("", alias="VIATOR_API_KEY_PROD")
     viator_env: str = Field("dev", alias="VIATOR_ENV")
-    viator_base_url: str = Field("https://api.viator.com/partner", alias="VIATOR_BASE_URL")
+    viator_base_url: str = Field("https://api.viator.com", alias="VIATOR_BASE_URL")
 
     @property
     def viator_api_key(self) -> str:
@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     cache_ttl_availability: int = Field(3600, description="1 hour")
     cache_ttl_destinations: int = Field(2592000, description="30 days")
     cache_ttl_categories: int = Field(2592000, description="30 days")
+    cache_ttl_locations: int = Field(2592000, description="30 days - Viator location coordinates")
 
 
 class SourceMeta(BaseModel):

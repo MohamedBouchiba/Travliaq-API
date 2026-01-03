@@ -92,7 +92,7 @@ class ViatorProductsService:
 
         logger.info(f"Searching products for destination {destination_id}")
 
-        response = await self.client.post("/products/search", request_body, language=language)
+        response = await self.client.post("/partner/products/search", request_body, language=language)
 
         logger.info(f"Found {response.get('totalCount', 0)} products")
 
@@ -111,7 +111,7 @@ class ViatorProductsService:
         """
         logger.info(f"Fetching product details for {product_code}")
 
-        return await self.client.get(f"/products/{product_code}", language=language)
+        return await self.client.get(f"/partner/products/{product_code}", language=language)
 
     async def get_bulk_products(self, product_codes: list[str], language: str = "en") -> list[dict]:
         """
@@ -130,7 +130,7 @@ class ViatorProductsService:
         logger.info(f"Fetching bulk product details for {len(product_codes)} products")
 
         response = await self.client.post(
-            "/products/bulk",
+            "/partner/products/bulk",
             json_data={"productCodes": product_codes},
             language=language
         )

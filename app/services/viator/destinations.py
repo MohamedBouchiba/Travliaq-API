@@ -49,7 +49,7 @@ class ViatorDestinationsService:
 
         try:
             response = await self.client.get(
-                "/destinations",
+                "/partner/destinations",
                 params={},
                 language=language
             )
@@ -89,7 +89,7 @@ class ViatorDestinationsService:
 
         try:
             response = await self.client.post(
-                "/search",
+                "/partner/search",
                 {
                     "searchTerm": search_term,
                     "searchTypes": ["DESTINATIONS"]
