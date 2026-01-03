@@ -72,11 +72,13 @@ class ViatorMapper:
         # Extract destination
         destinations = product.get("destinations", [])
         primary_dest = destinations[0] if destinations else {}
+        destination_id = primary_dest.get("ref") if primary_dest else None
 
         location = {
             "destination": primary_dest.get("name", "Unknown"),
             "country": primary_dest.get("country", "Unknown"),
-            "coordinates": None  # Will be enriched later via /locations/bulk
+            "coordinates": None,  # Will be enriched later via /locations/bulk
+            "coordinates_precision": None
         }
 
         # Extract categories (tags → simple category names)
@@ -97,7 +99,8 @@ class ViatorMapper:
             "booking_url": product.get("productUrl", ""),
             "confirmation_type": product.get("confirmationType", "UNKNOWN"),
             "location": location,
-            "availability": "available"  # Default - would need /availability/check for real status
+            "availability": "available",  # Default - would need /availability/check for real status
+            "_destination_id": destination_id  # Internal field for enrichment fallback
         }
 
     @staticmethod
@@ -156,6 +159,7 @@ class ViatorMapper:
             "destination": address.get("city", "Unknown"),
             "country": "Unknown",  # Not in API response
             "coordinates": coordinates,  # ✅ DIRECT COORDINATES
+            "coordinates_precision": "precise" if coordinates else None,
             "address": address.get("street")
         }
 

@@ -152,3 +152,33 @@ class LocationResolver:
         )
 
         return (destination["destination_id"], destination["name"], distance_km)
+
+    async def get_destination_coordinates(self, destination_id: str) -> Optional[dict]:
+        """
+        Get coordinates for a destination by its ID.
+
+        Args:
+            destination_id: Viator destination ID
+
+        Returns:
+            Dict with lat/lon or None if not found
+        """
+        destination = await self.destinations.find_one({"destination_id": destination_id})
+
+        if not destination:
+            logger.warning(f"Destination {destination_id} not found in database")
+            return None
+
+        # Extract coordinates from GeoJSON format
+        location = destination.get("location", {})
+        coordinates = location.get("coordinates", [])
+
+        if len(coordinates) >= 2:
+            # GeoJSON format is [lon, lat], convert to our format {lat, lon}
+            return {
+                "lat": coordinates[1],
+                "lon": coordinates[0]
+            }
+
+        logger.warning(f"Destination {destination_id} has no valid coordinates")
+        return None

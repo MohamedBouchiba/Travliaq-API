@@ -149,6 +149,7 @@ class ActivityLocation(BaseModel):
     destination: str
     country: str
     coordinates: Optional[dict] = None
+    coordinates_precision: Optional[str] = None  # "precise" | "destination" | null
 
 
 class Activity(BaseModel):

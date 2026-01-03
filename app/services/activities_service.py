@@ -436,11 +436,12 @@ class ActivitiesService:
             enriched_count = 0
             for activity in candidates:
                 p_code = activity["id"]
-                
+
                 # 1. Check direct product coords (highest priority if specific to this product)
                 direct_coords = product_direct_coords_map.get(p_code)
                 if direct_coords:
                     activity["location"]["coordinates"] = direct_coords
+                    activity["location"]["coordinates_precision"] = "precise"
                     logger.info(f"Enriched activity {p_code} with direct coordinates: {direct_coords}")
                     enriched_count += 1
                     continue
@@ -451,11 +452,27 @@ class ActivitiesService:
                     coords = resolved_coords_map.get(ref)
                     if coords:
                         activity["location"]["coordinates"] = coords
+                        activity["location"]["coordinates_precision"] = "precise"
                         logger.info(f"Enriched activity {p_code} with ref-resolved coordinates: {coords}")
                         enriched_count += 1
                         break
-            
+
             logger.info(f"[ENRICH] Total enriched: {enriched_count}/{len(candidates)}")
+
+            # Step 4: Fallback to destination coordinates for activities still without coords
+            fallback_count = 0
+            for activity in candidates:
+                if activity.get("location", {}).get("coordinates") is None:
+                    destination_id = activity.get("_destination_id")
+                    if destination_id:
+                        dest_coords = await self.location_resolver.get_destination_coordinates(destination_id)
+                        if dest_coords:
+                            activity["location"]["coordinates"] = dest_coords
+                            activity["location"]["coordinates_precision"] = "destination"
+                            fallback_count += 1
+                            logger.info(f"[ENRICH] Fallback: Activity {activity['id']} → destination coords {dest_coords}")
+
+            logger.info(f"[ENRICH] Fallback enriched: {fallback_count} activities with destination coordinates")
 
             # Log summary of activities WITH coordinates for debugging
             activities_with_coords = [
