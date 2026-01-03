@@ -320,11 +320,13 @@ class ActivitiesService:
             for prod in products_details:
                 # NEW: Extract full location info (ref + coords)
                 locs = ViatorMapper.extract_product_locations(prod)
-                
+                logger.debug(f"[ENRICH] Product {prod['productCode']}: extracted {len(locs)} locations")
+
                 # Store refs for potential lookup
                 refs = [l["ref"] for l in locs if l["ref"]]
                 if refs:
                     product_refs_map[prod["productCode"]] = refs
+                    logger.debug(f"[ENRICH] Product {prod['productCode']}: refs = {refs}")
                 
                 # Check directly extracted coords
                 for loc in locs:
@@ -406,9 +408,21 @@ class ActivitiesService:
                         break
             
             logger.info(f"[ENRICH] Total enriched: {enriched_count}/{len(candidates)}")
-            
 
-                        
+            # Log summary of activities WITH coordinates for debugging
+            activities_with_coords = [
+                a for a in candidates
+                if a.get("location", {}).get("coordinates") is not None
+            ]
+            logger.info(f"[ENRICH] FINAL: {len(activities_with_coords)}/{len(candidates)} activities have coordinates")
+
+            if len(activities_with_coords) > 0:
+                # Show first 3 examples
+                for i, act in enumerate(activities_with_coords[:3]):
+                    coords = act["location"]["coordinates"]
+                    logger.info(f"[ENRICH]   Example {i+1}: {act['id']} -> {coords}")
+
+
         except Exception as e:
             logger.error(f"Error enriching activities with locations: {e}", exc_info=True)
             # Don't fail the search if enrichment fails
