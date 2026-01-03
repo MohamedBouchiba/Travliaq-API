@@ -145,60 +145,74 @@ class ViatorMapper:
     def extract_product_locations(product: dict) -> list[dict]:
         """
         Extract location info (ref + coords if available) from product details.
-        
+
         Args:
             product: Product details from Viator API
-            
+
         Returns:
             List of dicts: {"ref": str, "lat": float, "lon": float}
         """
+        product_code = product.get("productCode", "UNKNOWN")
         locations = []
         seen_refs = set()
-        
-        def _add_loc(obj):
+
+        def _add_loc(obj, source="unknown"):
             loc_data = obj.get("location", {})
             ref = loc_data.get("ref")
-            
+
             # Check for coordinates in various common places
             # 1. Direct in location object
             lat = loc_data.get("latitude") or loc_data.get("lat")
             lon = loc_data.get("longitude") or loc_data.get("lon")
-            
+
             # 2. In 'center' sub-object
             if not lat:
                 center = loc_data.get("center", {})
                 lat = center.get("latitude") or center.get("lat")
                 lon = center.get("longitude") or center.get("lon")
-                
+
             if not ref and not (lat and lon):
                 return
 
             if ref in seen_refs:
                 return
-            
+
             if ref:
                 seen_refs.add(ref)
-            
-            locations.append({
+
+            loc_info = {
                 "ref": ref,
                 "lat": lat,
                 "lon": lon
-            })
+            }
+            locations.append(loc_info)
+            logger.info(f"[MAPPER] {product_code} - Found location from {source}: ref={ref}, coords={'Yes' if (lat and lon) else 'No'}")
 
         # Check logistics start/end
         logistics = product.get("logistics", {})
-        for start_point in logistics.get("start", []):
-            _add_loc(start_point)
-        for end_point in logistics.get("end", []):
-            _add_loc(end_point)
-                
+        start_points = logistics.get("start", [])
+        end_points = logistics.get("end", [])
+
+        logger.info(f"[MAPPER] {product_code} - Logistics: {len(start_points)} start points, {len(end_points)} end points")
+
+        for start_point in start_points:
+            _add_loc(start_point, "logistics.start")
+        for end_point in end_points:
+            _add_loc(end_point, "logistics.end")
+
         # Check itinerary points of interest
         itinerary = product.get("itinerary", {})
-        for day in itinerary.get("days", []):
-            for item in day.get("items", []):
-                point_of_interest = item.get("pointOfInterest", {})
-                _add_loc(point_of_interest)
-                    
+        days = itinerary.get("days", [])
+
+        if days:
+            logger.info(f"[MAPPER] {product_code} - Itinerary: {len(days)} days")
+            for day_idx, day in enumerate(days):
+                items = day.get("items", [])
+                for item in items:
+                    point_of_interest = item.get("pointOfInterest", {})
+                    _add_loc(point_of_interest, f"itinerary.day{day_idx+1}")
+
+        logger.info(f"[MAPPER] {product_code} - Total locations extracted: {len(locations)}")
         return locations
 
     @staticmethod

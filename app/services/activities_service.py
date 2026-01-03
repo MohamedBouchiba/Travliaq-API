@@ -67,6 +67,8 @@ class ActivitiesService:
         Returns:
             Activity search response
         """
+        logger.info(f"=== ACTIVITIES SEARCH STARTED === force_refresh={force_refresh}")
+
         # 1. Resolve location
         destination_id, matched_location = await self._resolve_location(request.location)
 
@@ -107,9 +109,13 @@ class ActivitiesService:
             ViatorMapper.map_product_summary(product)
             for product in viator_response.get("products", [])
         ]
-        
+
+        logger.info(f"Transformed {len(activities)} activities from Viator response")
+
         # 4.5 Enrich with locations (New Step)
+        logger.info(f"Starting location enrichment for {len(activities)} activities...")
         await self._enrich_activities_with_locations(activities, language=request.language)
+        logger.info(f"Location enrichment completed")
 
         # 5. Persist in MongoDB (async, non-blocking)
         await self._persist_activities(activities)
@@ -325,26 +331,29 @@ class ActivitiesService:
             for prod in products_details:
                 # NEW: Extract full location info (ref + coords)
                 locs = ViatorMapper.extract_product_locations(prod)
-                logger.debug(f"[ENRICH] Product {prod['productCode']}: extracted {len(locs)} locations")
+                if locs:
+                    logger.info(f"[ENRICH] Product {prod['productCode']}: extracted {len(locs)} locations")
 
                 # Store refs for potential lookup
                 refs = [l["ref"] for l in locs if l["ref"]]
                 if refs:
                     product_refs_map[prod["productCode"]] = refs
-                    logger.debug(f"[ENRICH] Product {prod['productCode']}: refs = {refs}")
+                    logger.info(f"[ENRICH] Product {prod['productCode']}: refs = {refs}")
                 
                 # Check directly extracted coords
                 for loc in locs:
                     coords = None
                     if loc["lat"] and loc["lon"]:
                         coords = {"lat": loc["lat"], "lon": loc["lon"]}
-                    
+
                     if coords:
                         if loc["ref"]:
                             resolved_coords_map[loc["ref"]] = coords
+                            logger.info(f"[ENRICH] Found coords for ref {loc['ref']}: {coords}")
                         elif prod["productCode"] not in product_direct_coords_map:
                             # If no ref but have coords, assign to product directly (first one wins)
                             product_direct_coords_map[prod["productCode"]] = coords
+                            logger.info(f"[ENRICH] Found direct coords for product {prod['productCode']}: {coords}")
                     elif loc["ref"]:
                         # No coords, but have ref -> needs fetch
                         all_refs_to_fetch.add(loc["ref"])
