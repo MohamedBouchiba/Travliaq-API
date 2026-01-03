@@ -1206,7 +1206,15 @@ class ActivitiesService:
 
         end_date = request.dates.end.isoformat() if request.dates.end else "none"
 
-        return f"{destination_id}:{request.dates.start.isoformat()}:{end_date}:{filters_hash}"
+        # Include search_mode to differentiate activities/attractions/both
+        mode = request.search_mode.value
+
+        # Include geo info to differentiate city vs geo searches
+        geo_suffix = ""
+        if request.location.geo:
+            geo_suffix = f":geo:{request.location.geo.lat:.4f}:{request.location.geo.lon:.4f}:{request.location.geo.radius_km}"
+
+        return f"{destination_id}:{request.dates.start.isoformat()}:{end_date}:{filters_hash}:{mode}{geo_suffix}"
 
     def _build_filters_summary(self, request: ActivitySearchRequest) -> dict:
         """Build summary of applied filters for response."""
