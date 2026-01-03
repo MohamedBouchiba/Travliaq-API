@@ -126,7 +126,7 @@ class ActivityImage(BaseModel):
 
 class ActivityPricing(BaseModel):
     """Activity pricing information."""
-    from_price: float
+    from_price: Optional[float] = None
     currency: str
     original_price: Optional[float] = None
     is_discounted: bool = False
