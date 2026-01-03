@@ -328,12 +328,31 @@ class ActivitiesService:
                 return
 
             # Step 2: Bulk fetch location details to get coordinates
-            locations_details = await self.viator_client.get_bulk_locations(list(all_refs))
+            # Note: /locations/bulk likely also returns 403, so we use parallel individual fetches
+            logger.info(f"[ENRICH] Fetching details for {len(all_refs)} locations in parallel")
+            tasks = [
+                self.viator_client.get_location_details(ref)
+                for ref in all_refs
+            ]
+            locations_details = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Filter out exceptions
+            valid_locs = []
+            for res in locations_details:
+                if isinstance(res, Exception):
+                    logger.warning(f"[ENRICH] Failed to fetch location details: {res}")
+                elif res:
+                    valid_locs.append(res)
+            
+            locations_details = valid_locs
             logger.info(f"[ENRICH] Fetched {len(locations_details)} location details")
             
             # Map ref -> {lat, lon}
             ref_coords_map = {}
             for loc in locations_details:
+                # Singular endpoint returns the location object directly, unlike bulk which wraps in "locations" list or similar
+                # We need to verify the response structure for singular /locations/{ref}.
+                # Documentation says it returns the Location object.
                 center = loc.get("center")
                 if center:
                     ref_coords_map[loc["reference"]] = {
