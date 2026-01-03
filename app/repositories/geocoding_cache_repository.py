@@ -168,12 +168,32 @@ class GeocodingCacheRepository:
 
         # TTL index on last_used - auto-delete after 90 days of inactivity
         # This also serves as a regular index for queries
-        # Using explicit name to avoid conflict with existing indexes
-        await self.collection.create_index(
-            "last_used",
-            name="last_used_ttl",  # Explicit name to avoid conflicts
-            expireAfterSeconds=90 * 24 * 60 * 60  # 90 days
-        )
+        try:
+            await self.collection.create_index(
+                "last_used",
+                name="last_used_ttl",
+                expireAfterSeconds=90 * 24 * 60 * 60  # 90 days
+            )
+        except Exception as e:
+            # If index conflict (old index exists), drop and recreate
+            if "IndexOptionsConflict" in str(e) or "already exists" in str(e):
+                logger.warning(f"Index conflict detected, dropping old index: {e}")
+                try:
+                    # Drop the old index
+                    await self.collection.drop_index("last_used_1")
+                    logger.info("Dropped old index 'last_used_1'")
+                except Exception as drop_err:
+                    logger.warning(f"Could not drop old index: {drop_err}")
+
+                # Recreate with TTL
+                await self.collection.create_index(
+                    "last_used",
+                    name="last_used_ttl",
+                    expireAfterSeconds=90 * 24 * 60 * 60
+                )
+                logger.info("Recreated index with TTL")
+            else:
+                raise
 
         # Use count (for analytics)
         await self.collection.create_index("use_count")
