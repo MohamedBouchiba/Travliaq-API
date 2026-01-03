@@ -87,7 +87,7 @@ class ActivitiesService:
         Returns:
             Activity search response
         """
-        logger.info(f"=== ACTIVITIES SEARCH STARTED === force_refresh={force_refresh}")
+        logger.info(f"=== ACTIVITIES SEARCH STARTED === mode={request.search_mode.value} force_refresh={force_refresh}")
 
         # 1. Resolve location
         destination_id, matched_location = await self._resolve_location(request.location)
@@ -121,11 +121,16 @@ class ActivitiesService:
 
         logger.info(f"Cache MISS for activities search")
 
-        # 3. Call Viator API (conditional based on search_type)
-        from app.models.activities import SearchType
+        # 3. Call Viator API (conditional based on search_mode)
+        from app.models.activities import SearchMode
 
-        if request.search_type == SearchType.ATTRACTIONS:
-            # NEW FLOW: Search attractions (have direct coordinates!)
+        if request.search_mode == SearchMode.BOTH:
+            # UNIFIED SEARCH: Fetch both activities and attractions in parallel
+            logger.info(f"[UNIFIED] Fetching BOTH activities AND attractions for destination {destination_id}")
+            activities, total_count = await self._search_unified(destination_id, request)
+
+        elif request.search_mode == SearchMode.ATTRACTIONS:
+            # ATTRACTIONS ONLY
             logger.info(f"Searching ATTRACTIONS for destination {destination_id}")
 
             viator_response = await self.viator_attractions.search_attractions(
@@ -136,35 +141,34 @@ class ActivitiesService:
                 language=request.language
             )
 
-            # 4. Transform attractions
             activities = [
                 ViatorMapper.map_attraction(attraction)
                 for attraction in viator_response.get("attractions", [])
             ]
+            total_count = viator_response.get("totalCount", 0)
 
             logger.info(f"Transformed {len(activities)} attractions from Viator response")
-            # NO ENRICHMENT NEEDED - attractions have direct coordinates!
 
-        else:  # SearchType.ACTIVITIES (default)
-            # EXISTING FLOW: Search products/activities
+        else:  # SearchMode.ACTIVITIES (default)
+            # ACTIVITIES ONLY
             logger.info(f"Searching ACTIVITIES for destination {destination_id}")
 
             viator_response = await self._call_viator_search(destination_id, request)
 
-            # 4. Transform response
             activities = [
                 ViatorMapper.map_product_summary(product)
                 for product in viator_response.get("products", [])
             ]
+            total_count = viator_response.get("totalCount", 0)
 
             logger.info(f"Transformed {len(activities)} activities from Viator response")
 
-            # 4.5 Enrich with locations (New Step - ONLY for activities)
+            # Enrich with locations (ONLY for activities)
             logger.info(f"Starting location enrichment for {len(activities)} activities...")
             await self._enrich_activities_with_locations(activities, language=request.language)
             logger.info(f"Location enrichment completed")
 
-        # 4.6 Resolve tag IDs to names (for both activities and attractions)
+        # 4. Resolve tag IDs to names (for all types)
         logger.info(f"Resolving tag names for {len(activities)} items...")
         await self._resolve_tag_names(activities, language=request.language)
         logger.info(f"Tag resolution completed")
@@ -174,7 +178,7 @@ class ActivitiesService:
 
         # 6. Cache results
         results = SearchResults(
-            total=viator_response.get("totalCount", 0),
+            total=total_count,
             page=request.pagination.page,
             limit=request.pagination.limit,
             activities=activities
@@ -283,6 +287,115 @@ class ActivitiesService:
         kwargs["count"] = request.pagination.limit
 
         return await self.viator_products.search_products(**kwargs)
+
+    async def _search_unified(self, destination_id: str, request: ActivitySearchRequest) -> tuple[list[dict], int]:
+        """
+        Unified search: Fetch BOTH activities and attractions in parallel and merge them.
+
+        Strategy:
+        - Fetch activities (max 50) and attractions (max 30) in parallel
+        - Transform both to common format
+        - Merge and sort by rating
+        - Apply pagination to merged results
+
+        Args:
+            destination_id: Viator destination ID
+            request: Search request with filters and pagination
+
+        Returns:
+            Tuple of (merged_activities, total_count)
+        """
+        logger.info(f"[UNIFIED] Starting parallel fetch for destination {destination_id}")
+
+        # Prepare parallel tasks
+        async def fetch_activities():
+            """Fetch and transform activities."""
+            try:
+                logger.info(f"[UNIFIED] Fetching activities...")
+                viator_response = await self._call_viator_search(destination_id, request)
+
+                activities = [
+                    ViatorMapper.map_product_summary(product)
+                    for product in viator_response.get("products", [])
+                ]
+
+                # Add type field
+                for activity in activities:
+                    activity["type"] = "activity"
+
+                logger.info(f"[UNIFIED] Fetched {len(activities)} activities (total: {viator_response.get('totalCount', 0)})")
+
+                # Enrich with locations
+                await self._enrich_activities_with_locations(activities, language=request.language)
+
+                return activities, viator_response.get("totalCount", 0)
+            except Exception as e:
+                logger.error(f"[UNIFIED] Error fetching activities: {e}")
+                return [], 0
+
+        async def fetch_attractions():
+            """Fetch and transform attractions."""
+            try:
+                logger.info(f"[UNIFIED] Fetching attractions...")
+                viator_response = await self.viator_attractions.search_attractions(
+                    destination_id=destination_id,
+                    sort="DEFAULT",
+                    start=1,
+                    count=30,  # Limit attractions to 30
+                    language=request.language
+                )
+
+                attractions = [
+                    ViatorMapper.map_attraction(attraction)
+                    for attraction in viator_response.get("attractions", [])
+                ]
+
+                # Add type field
+                for attraction in attractions:
+                    attraction["type"] = "attraction"
+
+                logger.info(f"[UNIFIED] Fetched {len(attractions)} attractions (total: {viator_response.get('totalCount', 0)})")
+
+                return attractions, viator_response.get("totalCount", 0)
+            except Exception as e:
+                logger.error(f"[UNIFIED] Error fetching attractions: {e}")
+                return [], 0
+
+        # Execute both in parallel
+        (activities, activities_total), (attractions, attractions_total) = await asyncio.gather(
+            fetch_activities(),
+            fetch_attractions()
+        )
+
+        # Merge results
+        merged = activities + attractions
+
+        logger.info(
+            f"[UNIFIED] Merged results: {len(activities)} activities + {len(attractions)} attractions = {len(merged)} total"
+        )
+
+        # Sort by rating (descending)
+        merged.sort(
+            key=lambda x: x.get("rating", {}).get("average", 0),
+            reverse=True
+        )
+
+        logger.info(f"[UNIFIED] Sorted {len(merged)} items by rating")
+
+        # Apply pagination to merged results
+        start_idx = (request.pagination.page - 1) * request.pagination.limit
+        end_idx = start_idx + request.pagination.limit
+        paginated = merged[start_idx:end_idx]
+
+        logger.info(
+            f"[UNIFIED] Pagination: page {request.pagination.page}, "
+            f"showing items {start_idx+1}-{min(end_idx, len(merged))} of {len(merged)}"
+        )
+
+        # Total count is sum of both
+        total_count = activities_total + attractions_total
+
+        return paginated, total_count
 
     async def _map_categories_to_tags(self, categories: Optional[list[str]], language: str = "en") -> Optional[list[int]]:
         """
