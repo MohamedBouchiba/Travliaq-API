@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import httpx
 
 from app.api.routes import router
@@ -40,6 +41,15 @@ from app.repositories.geocoding_cache_repository import GeocodingCacheRepository
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for now (can be restricted later)
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods including OPTIONS
+    allow_headers=["*"],  # Allow all headers
+)
 
 
 async def cleanup_cache_task():
