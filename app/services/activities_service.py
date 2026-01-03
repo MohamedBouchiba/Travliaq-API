@@ -146,6 +146,11 @@ class ActivitiesService:
             await self._enrich_activities_with_locations(activities, language=request.language)
             logger.info(f"Location enrichment completed")
 
+        # 4.6 Resolve tag IDs to names (for both activities and attractions)
+        logger.info(f"Resolving tag names for {len(activities)} items...")
+        await self._resolve_tag_names(activities, language=request.language)
+        logger.info(f"Tag resolution completed")
+
         # 5. Persist in MongoDB (async, non-blocking)
         await self._persist_activities(activities)
 
@@ -469,6 +474,72 @@ class ActivitiesService:
         except Exception as e:
             logger.error(f"Error enriching activities with locations: {e}", exc_info=True)
             # Don't fail the search if enrichment fails
+            pass
+
+    async def _resolve_tag_names(self, activities: list[dict], language: str = "en"):
+        """
+        Resolve tag IDs to human-readable names from MongoDB.
+
+        Args:
+            activities: List of activity dicts (will be modified in-place)
+            language: Language code for tag names
+        """
+        try:
+            # Step 1: Collect all unique tag IDs from all activities
+            all_tag_ids = set()
+            for activity in activities:
+                categories = activity.get("categories", [])
+                for category in categories:
+                    # Categories are now strings like "367660", parse them
+                    try:
+                        tag_id = int(category)
+                        all_tag_ids.add(tag_id)
+                    except ValueError:
+                        # Skip if not a numeric tag ID (e.g., "attraction")
+                        continue
+
+            if not all_tag_ids:
+                logger.info("No tag IDs to resolve")
+                return
+
+            logger.info(f"Resolving {len(all_tag_ids)} unique tag IDs from MongoDB")
+
+            # Step 2: Bulk fetch tags from MongoDB
+            tags_map = await self.tags_repo.get_tags_bulk(list(all_tag_ids))
+
+            logger.info(f"Found {len(tags_map)} tags in MongoDB")
+
+            # Step 3: Replace tag IDs with names in each activity
+            for activity in activities:
+                categories = activity.get("categories", [])
+                resolved_categories = []
+
+                for category in categories:
+                    try:
+                        tag_id = int(category)
+                        tag_doc = tags_map.get(tag_id)
+
+                        if tag_doc:
+                            # Get name in requested language, fallback to tag_name
+                            tag_name = tag_doc.get("all_names", {}).get(language) or tag_doc.get("tag_name", f"tag_{tag_id}")
+                            resolved_categories.append(tag_name)
+                        else:
+                            # Tag not found in DB, keep as generic
+                            logger.debug(f"Tag {tag_id} not found in MongoDB")
+                            resolved_categories.append(f"tag_{tag_id}")
+
+                    except ValueError:
+                        # Not a numeric tag ID (e.g., "attraction"), keep as-is
+                        resolved_categories.append(category)
+
+                # Replace categories with resolved names
+                activity["categories"] = resolved_categories
+
+            logger.info(f"Tag resolution completed for {len(activities)} activities")
+
+        except Exception as e:
+            logger.error(f"Error resolving tag names: {e}", exc_info=True)
+            # Don't fail the search if tag resolution fails
             pass
 
     def _build_cache_key(self, destination_id: str, request: ActivitySearchRequest) -> str:

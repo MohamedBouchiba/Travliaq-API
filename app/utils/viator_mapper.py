@@ -208,27 +208,19 @@ class ViatorMapper:
     @staticmethod
     def _map_tags_to_categories(tags: list[int]) -> list[str]:
         """
-        Convert Viator tag IDs to string representations.
-
-        NOTE: This is a temporary simple implementation. Tag IDs are converted to strings.
-        For production, this should be enhanced to:
-        - Look up tag names from MongoDB tags collection
-        - Map to user-friendly category names
-        - Support multilingual tag names
+        Return tag IDs as strings to be resolved later from MongoDB.
 
         Args:
             tags: List of Viator tag IDs
 
         Returns:
-            List of tag IDs as strings (or ["general"] if no tags)
+            List of tag IDs as strings (up to 5) or empty list
         """
-        # For now, convert tag IDs to strings to preserve information
-        # Frontend can look up tag names from /tags endpoint if needed
         if not tags:
-            return ["general"]
+            return []
 
-        # Return first 5 tags as strings to avoid too many categories
-        return [f"tag_{tag_id}" for tag_id in tags[:5]]
+        # Return first 5 tags as strings (will be resolved to names later in service)
+        return [str(tag_id) for tag_id in tags[:5]]
 
     @staticmethod
     def extract_product_locations(product: dict) -> list[dict]:

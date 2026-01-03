@@ -37,6 +37,25 @@ class TagsRepository:
         """Get tag by ID."""
         return await self.collection.find_one({"tag_id": tag_id})
 
+    async def get_tags_bulk(self, tag_ids: List[int]) -> dict[int, dict]:
+        """
+        Get multiple tags by IDs in a single query.
+
+        Args:
+            tag_ids: List of Viator tag IDs
+
+        Returns:
+            Dictionary mapping tag_id -> tag document
+        """
+        if not tag_ids:
+            return {}
+
+        cursor = self.collection.find({"tag_id": {"$in": tag_ids}})
+        tags = await cursor.to_list(length=len(tag_ids))
+
+        # Return as dict for fast lookup
+        return {tag["tag_id"]: tag for tag in tags}
+
     async def get_tag_by_name(self, tag_name: str, language: str = "en") -> Optional[dict]:
         """
         Get tag by name (case insensitive).
