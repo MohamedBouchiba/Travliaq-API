@@ -48,13 +48,13 @@ class ActivitiesService:
         self.location_resolver = location_resolver
         self.cache_ttl = cache_ttl
 
-    async def search_activities(self, request: ActivitySearchRequest) -> ActivitySearchResponse:
+    async def search_activities(self, request: ActivitySearchRequest, force_refresh: bool = False) -> ActivitySearchResponse:
         """
         Search activities with caching and persistence.
 
         Flow:
         1. Resolve location (city/geo → destination_id)
-        2. Check Redis cache
+        2. Check Redis cache (unless force_refresh=True)
         3. If miss → Call Viator API
         4. Transform response (simplify)
         5. Cache in Redis + persist in MongoDB
@@ -62,6 +62,7 @@ class ActivitiesService:
 
         Args:
             request: Activity search request
+            force_refresh: If True, bypass cache and fetch fresh data
 
         Returns:
             Activity search response
@@ -74,23 +75,27 @@ class ActivitiesService:
 
         logger.info(f"Resolved location to destination ID: {destination_id}")
 
-        # 2. Check cache
+        # 2. Check cache (unless force_refresh)
         cache_key = self._build_cache_key(destination_id, request)
-        cached = self.cache.get("activities_search", {"key": cache_key})
 
-        if cached:
-            logger.info(f"Cache HIT for activities search")
-            return ActivitySearchResponse(
-                success=True,
-                location=matched_location,
-                filters_applied=self._build_filters_summary(request),
-                results=SearchResults(**cached["results"]),
-                cache_info=CacheInfo(
-                    cached=True,
-                    cached_at=cached.get("cached_at"),
-                    expires_at=cached.get("expires_at")
+        if not force_refresh:
+            cached = self.cache.get("activities_search", {"key": cache_key})
+
+            if cached:
+                logger.info(f"Cache HIT for activities search")
+                return ActivitySearchResponse(
+                    success=True,
+                    location=matched_location,
+                    filters_applied=self._build_filters_summary(request),
+                    results=SearchResults(**cached["results"]),
+                    cache_info=CacheInfo(
+                        cached=True,
+                        cached_at=cached.get("cached_at"),
+                        expires_at=cached.get("expires_at")
+                    )
                 )
-            )
+        else:
+            logger.info(f"FORCE REFRESH requested - bypassing cache")
 
         logger.info(f"Cache MISS for activities search")
 

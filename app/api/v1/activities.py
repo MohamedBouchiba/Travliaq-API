@@ -57,6 +57,9 @@ def get_activities_service(request: Request):
     - Sort by rating, price, or default
     - Pagination support
 
+    **Query Parameters**:
+    - `force_refresh`: Set to `true` to bypass cache and get fresh data
+
     **Example**:
     ```json
     {
@@ -77,6 +80,7 @@ def get_activities_service(request: Request):
 )
 async def search_activities(
     request: ActivitySearchRequest,
+    force_refresh: bool = False,
     service=Depends(get_activities_service)
 ):
     """
@@ -86,7 +90,7 @@ async def search_activities(
     information suitable for frontend consumption (images, pricing, ratings, etc.).
     """
     try:
-        response = await service.search_activities(request)
+        response = await service.search_activities(request, force_refresh=force_refresh)
         return response
 
     except ValueError as e:
