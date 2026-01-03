@@ -3,6 +3,7 @@
 from __future__ import annotations
 import hashlib
 import json
+import asyncio
 import logging
 from typing import Optional
 from datetime import datetime
@@ -289,7 +290,25 @@ class ActivitiesService:
             logger.info(f"[ENRICH] Attempting to enrich {len(candidates)} activities")
             
             # Step 1: Bulk fetch product details to get location refs
-            products_details = await self.viator_products.get_bulk_products(product_codes, language=language)
+            # Note: /products/bulk returns 403 for some keys, so we fallback to parallel individual fetches
+            # products_details = await self.viator_products.get_bulk_products(product_codes, language=language)
+            
+            logger.info(f"[ENRICH] Fetching details for {len(product_codes)} products in parallel")
+            tasks = [
+                self.viator_products.get_product_details(code, language=language)
+                for code in product_codes
+            ]
+            products_details = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Filter out exceptions
+            valid_details = []
+            for res in products_details:
+                if isinstance(res, Exception):
+                    logger.warning(f"[ENRICH] Failed to fetch product details: {res}")
+                elif res:
+                    valid_details.append(res)
+            
+            products_details = valid_details
             logger.info(f"[ENRICH] Fetched {len(products_details)} product details")
             
             # Map product_code -> location_refs
