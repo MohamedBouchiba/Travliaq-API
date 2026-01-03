@@ -75,7 +75,8 @@ class ViatorMapper:
 
         location = {
             "destination": primary_dest.get("name", "Unknown"),
-            "country": primary_dest.get("country", "Unknown")
+            "country": primary_dest.get("country", "Unknown"),
+            "coordinates": None  # Will be enriched later via /locations/bulk
         }
 
         # Extract categories (tags → simple category names)
