@@ -173,6 +173,17 @@ class ActivitiesService:
         await self._resolve_tag_names(activities, language=request.language)
         logger.info(f"Tag resolution completed")
 
+        # 4.5 Apply geo filtering if geo search was performed
+        if request.location.geo:
+            logger.info(f"[GEO] Applying geographic filtering and sorting...")
+            activities, total_count = await self._apply_geo_filtering(
+                activities=activities,
+                search_coords={"lat": request.location.geo.lat, "lon": request.location.geo.lon},
+                radius_km=request.location.geo.radius_km,
+                original_total=total_count
+            )
+            logger.info(f"[GEO] After filtering: {len(activities)} activities within {request.location.geo.radius_km}km")
+
         # 5. Persist in MongoDB (async, non-blocking)
         await self._persist_activities(activities)
 
@@ -211,7 +222,8 @@ class ActivitiesService:
             return location.destination_id, LocationResolution(
                 matched_city=None,
                 destination_id=location.destination_id,
-                coordinates=None
+                coordinates=None,
+                search_type="destination_id"
             )
 
         # Option 2: City name
@@ -226,7 +238,8 @@ class ActivitiesService:
                     matched_city=matched_city,
                     destination_id=dest_id,
                     coordinates=None,
-                    match_score=score
+                    match_score=score,
+                    search_type="city"
                 )
 
         # Option 3: Geo coordinates
@@ -243,7 +256,8 @@ class ActivitiesService:
                     matched_city=city_name,
                     destination_id=dest_id,
                     coordinates={"lat": geo.lat, "lon": geo.lon},
-                    distance_km=distance_km
+                    distance_km=distance_km,
+                    search_type="geo"
                 )
 
         return None, LocationResolution(destination_id="", matched_city=None)
@@ -1035,6 +1049,88 @@ class ActivitiesService:
         except Exception as e:
             logger.error(f"[LEVEL 4] Error during dispersion: {e}", exc_info=True)
             # Don't fail - activities without coords will be returned as-is
+
+    async def _apply_geo_filtering(
+        self,
+        activities: list[dict],
+        search_coords: dict,
+        radius_km: float,
+        original_total: int
+    ) -> tuple[list[dict], int]:
+        """
+        Apply geographic filtering for coordinate-based searches.
+
+        Strategy:
+        - Calculate distance from search point for each activity
+        - Filter activities outside the specified radius
+        - Add distance_from_search field to each activity
+        - Sort by distance (ascending)
+
+        Args:
+            activities: List of activity dicts
+            search_coords: {"lat": float, "lon": float} - search center point
+            radius_km: Maximum distance from search point
+            original_total: Original total count before filtering
+
+        Returns:
+            Tuple of (filtered_activities, filtered_total)
+        """
+        try:
+            from app.utils.coordinate_dispersion import _haversine_distance
+
+            logger.info(
+                f"[GEO] Filtering {len(activities)} activities within {radius_km}km "
+                f"of ({search_coords['lat']:.4f}, {search_coords['lon']:.4f})"
+            )
+
+            # Calculate distance for each activity and filter
+            filtered = []
+            skipped_no_coords = 0
+
+            for activity in activities:
+                coords = activity.get("location", {}).get("coordinates")
+
+                if not coords or not coords.get("lat") or not coords.get("lon"):
+                    # Skip activities without coordinates
+                    skipped_no_coords += 1
+                    continue
+
+                # Calculate distance from search point
+                distance_km = _haversine_distance(
+                    search_coords["lat"], search_coords["lon"],
+                    coords["lat"], coords["lon"]
+                )
+
+                # Filter by radius
+                if distance_km <= radius_km:
+                    # Add distance field
+                    activity["distance_from_search"] = round(distance_km, 2)
+                    filtered.append(activity)
+
+            logger.info(
+                f"[GEO] Filtered: {len(filtered)}/{len(activities)} activities within radius "
+                f"(skipped {skipped_no_coords} without coords)"
+            )
+
+            # Sort by distance (ascending - closest first)
+            filtered.sort(key=lambda x: x.get("distance_from_search", float('inf')))
+
+            logger.info(
+                f"[GEO] Sorted by distance. "
+                f"Closest: {filtered[0]['distance_from_search']:.2f}km, "
+                f"Farthest: {filtered[-1]['distance_from_search']:.2f}km"
+                if filtered else "[GEO] No activities found within radius"
+            )
+
+            # Update total count to reflect filtered results
+            filtered_total = len(filtered)
+
+            return filtered, filtered_total
+
+        except Exception as e:
+            logger.error(f"[GEO] Error during geo filtering: {e}", exc_info=True)
+            # On error, return original list without filtering
+            return activities, original_total
 
     async def _resolve_tag_names(self, activities: list[dict], language: str = "en"):
         """
