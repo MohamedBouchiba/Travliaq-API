@@ -147,6 +147,10 @@ class ActivitiesService:
             ]
             total_count = viator_response.get("totalCount", 0)
 
+            # Set type field for consistency
+            for activity in activities:
+                activity["type"] = "attraction"
+
             logger.info(f"Transformed {len(activities)} attractions from Viator response")
 
         else:  # SearchMode.ACTIVITIES (default)
@@ -160,6 +164,10 @@ class ActivitiesService:
                 for product in viator_response.get("products", [])
             ]
             total_count = viator_response.get("totalCount", 0)
+
+            # Set type field for consistency
+            for activity in activities:
+                activity["type"] = "activity"
 
             logger.info(f"Transformed {len(activities)} activities from Viator response")
 
