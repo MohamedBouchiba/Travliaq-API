@@ -310,15 +310,90 @@ class ActivitiesService:
 
         return await self.viator_products.search_products(**kwargs)
 
+    def _balance_results(
+        self,
+        merged_results: list[dict],
+        target_count: int,
+        target_ratio: Optional[dict[str, float]] = None
+    ) -> list[dict]:
+        """
+        Balance merged results to achieve target type distribution.
+
+        This function implements intelligent balancing to ensure a good mix of activities
+        and attractions in the final results while respecting rating order as much as possible.
+
+        Args:
+            merged_results: Sorted list of activities and attractions (by rating, descending)
+            target_count: Number of items to return (e.g., 50)
+            target_ratio: Desired ratio {"activity": 0.5, "attraction": 0.5}
+                         If None, uses equal 50/50 split
+
+        Returns:
+            Balanced subset of results
+
+        Strategy:
+        1. Walk through sorted list (by rating, descending)
+        2. Select items while maintaining target ratio
+        3. Prioritize higher-rated items
+        4. If one type exhausted, fill remaining slots with other type
+        """
+        if target_ratio is None:
+            target_ratio = {"activity": 0.5, "attraction": 0.5}
+
+        # Target counts per type
+        target_activities = int(target_count * target_ratio.get("activity", 0.5))
+        target_attractions = int(target_count * target_ratio.get("attraction", 0.5))
+
+        # Counters
+        selected = []
+        counts = {"activity": 0, "attraction": 0}
+
+        # First pass: strict balancing while respecting rating order
+        for item in merged_results:
+            if len(selected) >= target_count:
+                break
+
+            item_type = item.get("type", "activity")
+
+            # Check if we can add this type
+            if item_type == "activity" and counts["activity"] < target_activities:
+                selected.append(item)
+                counts["activity"] += 1
+            elif item_type == "attraction" and counts["attraction"] < target_attractions:
+                selected.append(item)
+                counts["attraction"] += 1
+
+        # Second pass: fill remaining slots if one type exhausted
+        # This ensures we still return target_count items even if one type has fewer results
+        if len(selected) < target_count:
+            for item in merged_results:
+                if len(selected) >= target_count:
+                    break
+
+                if item not in selected:
+                    selected.append(item)
+                    item_type = item.get("type", "activity")
+                    counts[item_type] = counts.get(item_type, 0) + 1
+
+        logger.info(
+            f"[BALANCE] Target: {target_count} items "
+            f"({target_activities} activities/{target_attractions} attractions) "
+            f"→ Result: {len(selected)} items "
+            f"({counts['activity']} activities/{counts['attraction']} attractions)"
+        )
+
+        return selected[:target_count]
+
     async def _search_unified(self, destination_id: str, request: ActivitySearchRequest) -> tuple[list[dict], int]:
         """
         Unified search: Fetch BOTH activities and attractions in parallel and merge them.
 
         Strategy:
-        - Fetch activities (max 50) and attractions (max 30) in parallel
+        - Over-fetch: Fetch 1.5x requested limit for both types (max 100 each from Viator)
         - Transform both to common format
         - Merge and sort by rating
-        - Apply pagination to merged results
+        - Apply intelligent balancing to achieve target ratio (50/50 by default)
+        - Apply pagination to balanced results
 
         Args:
             destination_id: Viator destination ID
@@ -329,12 +404,28 @@ class ActivitiesService:
         """
         logger.info(f"[UNIFIED] Starting parallel fetch for destination {destination_id}")
 
+        # Calculate adaptive fetch limits for over-fetching strategy
+        # Fetch 1.5x more than requested to enable better balancing
+        requested_limit = request.pagination.limit
+        activities_limit = min(int(requested_limit * 1.5), 100)  # Max 100 from Viator API
+        attractions_limit = min(int(requested_limit * 1.5), 100)
+
+        logger.info(
+            f"[UNIFIED] Over-fetch strategy: requesting {requested_limit} items, "
+            f"fetching {activities_limit} activities + {attractions_limit} attractions"
+        )
+
         # Prepare parallel tasks
         async def fetch_activities():
             """Fetch and transform activities."""
             try:
-                logger.info(f"[UNIFIED] Fetching activities...")
-                viator_response = await self._call_viator_search(destination_id, request)
+                logger.info(f"[UNIFIED] Fetching activities (limit: {activities_limit})...")
+
+                # Create a modified request with increased limit for over-fetching
+                modified_request = request.model_copy(deep=True)
+                modified_request.pagination.limit = activities_limit
+
+                viator_response = await self._call_viator_search(destination_id, modified_request)
 
                 activities = [
                     ViatorMapper.map_product_summary(product)
@@ -358,12 +449,12 @@ class ActivitiesService:
         async def fetch_attractions():
             """Fetch and transform attractions."""
             try:
-                logger.info(f"[UNIFIED] Fetching attractions...")
+                logger.info(f"[UNIFIED] Fetching attractions (limit: {attractions_limit})...")
                 viator_response = await self.viator_attractions.search_attractions(
                     destination_id=destination_id,
                     sort="DEFAULT",
                     start=1,
-                    count=30,  # Limit attractions to 30
+                    count=attractions_limit,  # Dynamic limit based on over-fetch strategy
                     language=request.language
                 )
 
@@ -404,14 +495,27 @@ class ActivitiesService:
 
         logger.info(f"[UNIFIED] Sorted {len(merged)} items by rating")
 
-        # Apply pagination to merged results
+        # Apply intelligent balancing BEFORE pagination
+        # Calculate total items needed for all pages up to current page
+        total_needed = request.pagination.page * request.pagination.limit
+
+        # Balance the full pool to achieve target 50/50 ratio
+        balanced = self._balance_results(
+            merged_results=merged,
+            target_count=min(total_needed, len(merged)),
+            target_ratio={"activity": 0.5, "attraction": 0.5}  # 50/50 split
+        )
+
+        logger.info(f"[UNIFIED] Balanced {len(merged)} items → {len(balanced)} balanced items")
+
+        # Now apply pagination to the balanced results
         start_idx = (request.pagination.page - 1) * request.pagination.limit
         end_idx = start_idx + request.pagination.limit
-        paginated = merged[start_idx:end_idx]
+        paginated = balanced[start_idx:end_idx]
 
         logger.info(
             f"[UNIFIED] Pagination: page {request.pagination.page}, "
-            f"showing items {start_idx+1}-{min(end_idx, len(merged))} of {len(merged)}"
+            f"showing items {start_idx+1}-{min(end_idx, len(balanced))} of {len(balanced)}"
         )
 
         # Total count is sum of both
