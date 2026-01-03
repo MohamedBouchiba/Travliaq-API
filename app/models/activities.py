@@ -124,6 +124,7 @@ class ActivitySearchRequest(BaseModel):
     pagination: Optional[Pagination] = Field(default_factory=Pagination)
     currency: str = Field(default="EUR", pattern="^[A-Z]{3}$")
     language: str = Field(default="en", pattern="^[a-z]{2}$")
+    user_preferences: Optional[dict] = Field(None, description="User preferences for intelligent activity scoring (interests, comfortLevel, pace)")
 
 
 # ============================================================================

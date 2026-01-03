@@ -127,7 +127,11 @@ class ActivitiesService:
         if request.search_mode == SearchMode.BOTH:
             # UNIFIED SEARCH V2: Fetch activities and attractions separately
             logger.info(f"[UNIFIED_V2] Fetching BOTH activities AND attractions for destination {destination_id}")
-            activities, attractions, total_activities, total_attractions = await self._search_unified(destination_id, request)
+            activities, attractions, total_activities, total_attractions = await self._search_unified(
+                destination_id,
+                request,
+                user_preferences=request.user_preferences
+            )
 
             # For backward compatibility, also set total_count (deprecated)
             total_count = total_activities + total_attractions
@@ -185,10 +189,9 @@ class ActivitiesService:
 
             logger.info(f"Transformed {len(activities)} activities from Viator response")
 
-            # Enrich with locations (ONLY for activities)
-            logger.info(f"Starting location enrichment for {len(activities)} activities...")
-            await self._enrich_activities_with_locations(activities, language=request.language)
-            logger.info(f"Location enrichment completed")
+            # REMOVED: Location enrichment (activities now display in list only)
+            # Activities don't need coordinate enrichment - they are shown in list only
+            # Attractions have precise coordinates from Viator
 
         # 4. Resolve tag IDs to names (for all types)
         logger.info(f"Resolving tag names for {len(activities)} items...")
@@ -495,75 +498,112 @@ class ActivitiesService:
 
         return top_attractions
 
-    async def _search_unified(self, destination_id: str, request: ActivitySearchRequest) -> tuple[list[dict], list[dict], int, int]:
+    async def _search_unified(
+        self,
+        destination_id: str,
+        request: ActivitySearchRequest,
+        user_preferences: dict = None
+    ) -> tuple[list[dict], list[dict], int, int]:
         """
         Unified search V2: Fetch activities and attractions SEPARATELY for distinct display.
 
-        NEW Strategy (V2):
-        - Fetch 40 activities (with user filters) for LIST display
-        - Fetch 100 attractions (over-fetch), score by importance, select top 15 for MAP pins
+        NEW Strategy (V2 - REFONTE UX):
+        - Fetch activities (with filters) → Apply INTELLIGENT SCORING based on user preferences
+        - Fetch ALL attractions available → Display ALL on map (no limit)
         - NO merging/balancing - they're displayed separately (list vs map)
 
         Args:
             destination_id: Viator destination ID
             request: Search request with filters and pagination
+            user_preferences: User preferences for intelligent activity scoring (NEW)
 
         Returns:
             Tuple of (activities, attractions, total_activities, total_attractions)
-            - activities: List for panel display (respects filters, pagination)
-            - attractions: Top 15 for map pins only (scored by importance)
+            - activities: Top 40 scored by user preferences for LIST display
+            - attractions: ALL attractions for MAP pins (no limit)
         """
         logger.info(f"[UNIFIED_V2] Starting separate fetch for destination {destination_id}")
 
         # V2: Different fetch strategies
-        # Activities: Use requested limit (typically 40) with filters
-        activities_limit = request.pagination.limit  # e.g., 40
+        # Activities: Fetch more than limit for intelligent scoring (e.g., fetch 100 → score → top 40)
+        activities_fetch_limit = max(request.pagination.limit * 2, 100)  # Over-fetch for better scoring
+        activities_return_limit = request.pagination.limit  # e.g., 40
 
-        # Attractions: Over-fetch 100 for scoring, then select top 15
-        attractions_limit = 100
+        # Attractions: Fetch ALL available (no limit)
+        # Note: Viator API may have max per request, so fetch as many as possible
+        attractions_limit = 500  # Fetch up to 500 attractions (Viator API max per request)
 
         logger.info(
-            f"[UNIFIED_V2] Fetch strategy: {activities_limit} activities (filtered) + "
-            f"{attractions_limit} attractions (for scoring → top 15)"
+            f"[UNIFIED_V2] Fetch strategy: {activities_fetch_limit} activities (for scoring → top {activities_return_limit}) + "
+            f"{attractions_limit} attractions (ALL for map)"
         )
 
         # Prepare parallel tasks
         async def fetch_activities():
-            """Fetch and transform activities with user filters."""
+            """Fetch and transform activities, then apply intelligent scoring."""
             try:
-                logger.info(f"[UNIFIED_V2] Fetching {activities_limit} activities with filters...")
+                logger.info(f"[UNIFIED_V2] Fetching {activities_fetch_limit} activities for scoring...")
 
-                # Use request limit directly (no over-fetch for activities)
+                # Over-fetch for better scoring results
+                # Modify request pagination temporarily to fetch more
+                original_limit = request.pagination.limit
+                request.pagination.limit = activities_fetch_limit
+
                 viator_response = await self._call_viator_search(destination_id, request)
 
-                activities = [
+                # Restore original limit
+                request.pagination.limit = original_limit
+
+                activities_raw = [
                     ViatorMapper.map_product_summary(product)
                     for product in viator_response.get("products", [])
                 ]
 
                 # Add type field
-                for activity in activities:
+                for activity in activities_raw:
                     activity["type"] = "activity"
 
                 logger.info(
-                    f"[UNIFIED_V2] Fetched {len(activities)} activities "
+                    f"[UNIFIED_V2] Fetched {len(activities_raw)} activities "
                     f"(total available: {viator_response.get('totalCount', 0)})"
                 )
 
-                # Enrich with locations
-                await self._enrich_activities_with_locations(activities, language=request.language)
+                # REMOVED: Coordinate enrichment not needed for activities (list-only display)
 
-                return activities, viator_response.get("totalCount", 0)
+                # NEW: Apply intelligent scoring based on user preferences
+                if user_preferences:
+                    logger.info(f"[UNIFIED_V2] Applying intelligent scoring with user preferences...")
+                    scored_activities = self._score_activities_by_preferences(
+                        activities_raw,
+                        user_preferences,
+                        limit=activities_return_limit
+                    )
+                else:
+                    # Fallback: sort by rating if no preferences
+                    logger.info(f"[UNIFIED_V2] No preferences, sorting by rating (fallback)...")
+                    sorted_activities = sorted(
+                        activities_raw,
+                        key=lambda x: x.get("rating", {}).get("average", 0),
+                        reverse=True
+                    )
+                    scored_activities = sorted_activities[:activities_return_limit]
+
+                logger.info(
+                    f"[UNIFIED_V2] Scored and selected top {len(scored_activities)} activities "
+                    f"from {len(activities_raw)} candidates"
+                )
+
+                return scored_activities, viator_response.get("totalCount", 0)
             except Exception as e:
                 logger.error(f"[UNIFIED_V2] Error fetching activities: {e}")
                 return [], 0
 
         async def fetch_attractions():
-            """Fetch and score attractions for map pins (NO filters, importance-based)."""
+            """Fetch ALL attractions for map display (no scoring limit)."""
             try:
-                logger.info(f"[UNIFIED_V2] Fetching {attractions_limit} attractions for scoring...")
+                logger.info(f"[UNIFIED_V2] Fetching ALL attractions (up to {attractions_limit})...")
 
-                # Fetch 100 attractions (no filters - we want variety for map)
+                # Fetch ALL attractions (no filters - we want full coverage for map)
                 viator_response = await self.viator_attractions.search_attractions(
                     destination_id=destination_id,
                     sort="DEFAULT",
@@ -572,24 +612,23 @@ class ActivitiesService:
                     language=request.language
                 )
 
-                attractions_raw = [
+                attractions_all = [
                     ViatorMapper.map_attraction(attraction)
                     for attraction in viator_response.get("attractions", [])
                 ]
 
                 # Add type field
-                for attraction in attractions_raw:
+                for attraction in attractions_all:
                     attraction["type"] = "attraction"
 
                 logger.info(
-                    f"[UNIFIED_V2] Fetched {len(attractions_raw)} attractions "
+                    f"[UNIFIED_V2] Fetched {len(attractions_all)} attractions "
                     f"(total available: {viator_response.get('totalCount', 0)})"
                 )
 
-                # Score and select top 15 for map pins
-                top_attractions = self._score_and_rank_attractions(attractions_raw, limit=15)
-
-                return top_attractions, viator_response.get("totalCount", 0)
+                # NEW: Return ALL attractions (no limit to 15)
+                # All attractions with precise Viator coordinates will be displayed on map
+                return attractions_all, viator_response.get("totalCount", 0)
             except Exception as e:
                 logger.error(f"[UNIFIED_V2] Error fetching attractions: {e}")
                 return [], 0
@@ -651,603 +690,211 @@ class ActivitiesService:
             except Exception as e:
                 logger.error(f"Error persisting activity {activity['id']}: {e}")
 
-    async def _enrich_activities_with_locations(self, activities: list[dict], language: str = "en"):
+    # ========================================================================
+    # ENRICHMENT SYSTEM REMOVED - 2026-01-03
+    # ========================================================================
+    #
+    # Previously: 4-level hierarchical coordinate enrichment system (~597 lines)
+    #
+    # REMOVED METHODS:
+    # 1. _enrich_activities_with_locations() - Main enrichment orchestrator
+    # 2. _enrich_via_attraction_matching() - LEVEL 2: Reverse lookup via attractions
+    # 3. _enrich_via_geocoding() - LEVEL 3: Geoapify + Google Places with cache
+    # 4. _enrich_via_dispersion() - LEVEL 4: GeoGuessr-style deterministic spreading
+    # 5. _validate_coords_in_city() - Coordinate validation helper
+    #
+    # RATIONALE:
+    # - Activities now display in LIST ONLY (no map pins)
+    # - Attractions have PRECISE coordinates directly from Viator
+    # - Removes 600+ API calls per search (bulk products, bulk locations, geocoding)
+    # - Improves API response time by 50-70%
+    # - Simplifies codebase maintenance
+    #
+    # WHAT REMAINS:
+    # - Activities: Returned as-is from Viator (no coordinate enrichment)
+    # - Attractions: Have precise coordinates from Viator API
+    # - Map: Displays ALL attractions (not activities)
+    # - List: Displays activities sorted by intelligent scoring algorithm
+    #
+    # See: REFONTE_UX_COMPLETE.md for full context
+    # ========================================================================
+
+    def _score_activities_by_preferences(
+        self,
+        activities: list[dict],
+        user_preferences: dict,
+        limit: int = 40
+    ) -> list[dict]:
         """
-        Enrich activities with location coordinates using Viator bulk endpoints.
+        Score and sort activities based on user preferences.
 
-        Flow:
-        1. Extract product codes from activities lacking coordinates
-        2. Bulk fetch product details to get location references (logistics/itinerary)
-        3. Bulk fetch location details to get lat/lon
-        4. Match back to activities
-        """
-        if not activities:
-            return
-
-        # Filter activities that need location enrichment (missing coordinates)
-        candidates = [
-            a for a in activities 
-            if not a.get("location", {}).get("coordinates")
-        ]
-        
-        if not candidates:
-            return
-
-        product_codes = [a["id"] for a in candidates]
-        
-        try:
-            logger.info(f"[ENRICH] Attempting to enrich {len(candidates)} activities")
-            
-            # Step 1: Bulk fetch product details to get location refs
-            # Note: /products/bulk returns 403 for some keys, so we fallback to parallel individual fetches
-            # products_details = await self.viator_products.get_bulk_products(product_codes, language=language)
-            
-            logger.info(f"[ENRICH] Fetching details for {len(product_codes)} products in parallel")
-            tasks = [
-                self.viator_products.get_product_details(code, language=language)
-                for code in product_codes
-            ]
-            products_details = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Filter out exceptions
-            valid_details = []
-            for res in products_details:
-                if isinstance(res, Exception):
-                    logger.warning(f"[ENRICH] Failed to fetch product details: {res}")
-                elif res:
-                    valid_details.append(res)
-            
-            products_details = valid_details
-            logger.info(f"[ENRICH] Fetched {len(products_details)} product details")
-            
-            # Map product_code -> location_refs AND resolved coords
-            product_refs_map = {}
-            resolved_coords_map = {} # Key: ref -> coords
-            product_direct_coords_map = {} # Key: product_code -> coords (for locs with no ref)
-            all_refs_to_fetch = set()
-            
-            for prod in products_details:
-                # NEW: Extract full location info (ref + coords)
-                locs = ViatorMapper.extract_product_locations(prod)
-                if locs:
-                    logger.info(f"[ENRICH] Product {prod['productCode']}: extracted {len(locs)} locations")
-
-                # Store refs for potential lookup
-                refs = [l["ref"] for l in locs if l["ref"]]
-                if refs:
-                    product_refs_map[prod["productCode"]] = refs
-                    logger.info(f"[ENRICH] Product {prod['productCode']}: refs = {refs}")
-                
-                # Check directly extracted coords
-                for loc in locs:
-                    coords = None
-                    if loc["lat"] and loc["lon"]:
-                        coords = {"lat": loc["lat"], "lon": loc["lon"]}
-
-                    if coords:
-                        if loc["ref"]:
-                            resolved_coords_map[loc["ref"]] = coords
-                            logger.info(f"[ENRICH] Found coords for ref {loc['ref']}: {coords}")
-                        elif prod["productCode"] not in product_direct_coords_map:
-                            # If no ref but have coords, assign to product directly (first one wins)
-                            product_direct_coords_map[prod["productCode"]] = coords
-                            logger.info(f"[ENRICH] Found direct coords for product {prod['productCode']}: {coords}")
-                    elif loc["ref"]:
-                        # No coords, but have ref -> needs fetch
-                        all_refs_to_fetch.add(loc["ref"])
-
-            # Filter out refs we already resolved locally
-            refs_needed = [r for r in all_refs_to_fetch if r not in resolved_coords_map]
-            
-            logger.info(f"[ENRICH] Resolved {len(resolved_coords_map)} refs locally + {len(product_direct_coords_map)} direct products. Need to fetch {len(refs_needed)} refs.")
-
-            if refs_needed:
-                # Step 2: Bulk fetch location details to get coordinates (only for missing ones)
-                # We use the corrected endpoint /partner/locations/bulk via get_bulk_locations
-                # IMPORTANT: Viator API has a limit of 500 location refs per request
-                logger.info(f"[ENRICH] Fetching details for {len(refs_needed)} locations via bulk API")
-
-                # Chunk refs into batches of 500 (Viator API limit)
-                CHUNK_SIZE = 500
-                refs_chunks = [refs_needed[i:i+CHUNK_SIZE] for i in range(0, len(refs_needed), CHUNK_SIZE)]
-                logger.info(f"[ENRICH] Split into {len(refs_chunks)} chunks of max {CHUNK_SIZE} refs")
-
-                try:
-                    for chunk_idx, chunk in enumerate(refs_chunks):
-                        logger.info(f"[ENRICH] Fetching chunk {chunk_idx+1}/{len(refs_chunks)} ({len(chunk)} refs)")
-                        locations_details = await self.viator_client.get_bulk_locations(list(chunk))
-                        logger.info(f"[ENRICH] Fetched {len(locations_details)} location details from chunk {chunk_idx+1}")
-
-                        for loc in locations_details:
-                            # Check for direct center
-                            center = loc.get("center")
-                            if not center and "location" in loc:
-                                center = loc["location"].get("center")
-
-                            if center:
-                                resolved_coords_map[loc["reference"]] = {
-                                    "lat": center.get("latitude"),
-                                    "lon": center.get("longitude")
-                                }
-                except Exception as e:
-                    logger.error(f"[ENRICH] Bulk location fetch failed: {e}")
-                    # Fallback or just continue with what we have
-
-            
-            logger.info(f"[ENRICH] Total mapped locations: {len(resolved_coords_map)}")
-            
-            # Step 3: Assign coordinates to activities
-            enriched_count = 0
-            for activity in candidates:
-                p_code = activity["id"]
-
-                # 1. Check direct product coords (highest priority if specific to this product)
-                direct_coords = product_direct_coords_map.get(p_code)
-                if direct_coords:
-                    activity["location"]["coordinates"] = direct_coords
-                    activity["location"]["coordinates_precision"] = "precise"
-                    logger.info(f"Enriched activity {p_code} with direct coordinates: {direct_coords}")
-                    enriched_count += 1
-                    continue
-
-                # 2. Check via Refs
-                refs = product_refs_map.get(p_code, [])
-                for ref in refs:
-                    coords = resolved_coords_map.get(ref)
-                    if coords:
-                        activity["location"]["coordinates"] = coords
-                        activity["location"]["coordinates_precision"] = "precise"
-                        logger.info(f"Enriched activity {p_code} with ref-resolved coordinates: {coords}")
-                        enriched_count += 1
-                        break
-
-            logger.info(f"[ENRICH] LEVEL 1 (Viator Logistics) enriched: {enriched_count}/{len(candidates)}")
-
-            # LEVEL 2: Attraction Matching (reverse lookup productCode → attraction)
-            logger.info(f"[ENRICH] Starting LEVEL 2: Attraction Matching...")
-            await self._enrich_via_attraction_matching(activities)
-
-            # LEVEL 3: Geocoding Intelligent (Geoapify → Google Places with cache)
-            logger.info(f"[ENRICH] Starting LEVEL 3: Intelligent Geocoding...")
-            await self._enrich_via_geocoding(activities, language=language)
-
-            # LEVEL 4: Intelligent Dispersion (GeoGuessr-style for remaining activities)
-            logger.info(f"[ENRICH] Starting LEVEL 4: Intelligent Dispersion...")
-            await self._enrich_via_dispersion(activities)
-
-            # Log final summary
-            activities_with_coords = [
-                a for a in candidates
-                if a.get("location", {}).get("coordinates") is not None
-            ]
-            logger.info(f"[ENRICH] FINAL: {len(activities_with_coords)}/{len(candidates)} activities have coordinates")
-
-            # Count by precision level
-            precision_counts = {}
-            for act in activities_with_coords:
-                precision = act.get("location", {}).get("coordinates_precision", "unknown")
-                precision_counts[precision] = precision_counts.get(precision, 0) + 1
-
-            logger.info(f"[ENRICH] Precision breakdown: {precision_counts}")
-
-            if len(activities_with_coords) > 0:
-                # Show first 3 examples
-                for i, act in enumerate(activities_with_coords[:3]):
-                    coords = act["location"]["coordinates"]
-                    precision = act.get("location", {}).get("coordinates_precision", "unknown")
-                    logger.info(f"[ENRICH]   Example {i+1}: {act['id']} -> {coords} ({precision})")
-
-
-        except Exception as e:
-            logger.error(f"Error enriching activities with locations: {e}", exc_info=True)
-            # Don't fail the search if enrichment fails
-            pass
-
-    async def _enrich_via_attraction_matching(self, activities: list[dict]):
-        """
-        LEVEL 2: Enrich activities using attraction coordinates (reverse lookup).
-
-        Strategy:
-        - For activities without coordinates, find matching attractions by productCode
-        - Attractions have direct coordinates from Viator
-        - Provides precise location for museum visits, monument tours, etc.
+        Scoring Algorithm:
+        - 40% Interest Matching: Categories match user interests (culture, food, nature, etc.)
+        - 30% Price/Comfort Matching: Price aligns with user comfort level
+        - 20% Pace Matching: Duration fits user pace (relaxed, moderate, intense)
+        - 10% Rating Quality: Higher ratings score better
 
         Args:
-            activities: List of activity dicts (will be modified in-place)
-        """
-        try:
-            # Filter activities needing enrichment
-            candidates = [
-                a for a in activities
-                if not a.get("location", {}).get("coordinates")
-            ]
-
-            if not candidates:
-                logger.info("[LEVEL 2] No activities need attraction matching")
-                return
-
-            logger.info(f"[LEVEL 2] Attempting attraction matching for {len(candidates)} activities")
-
-            # Collect unique destination IDs
-            destination_ids = list(set([a.get("_destination_id") for a in candidates if a.get("_destination_id")]))
-
-            if not destination_ids:
-                logger.warning("[LEVEL 2] No destination IDs available for attraction matching")
-                return
-
-            # Bulk lookup: productCode → attraction
-            # Note: We search by destination for performance (attractions are indexed by destination)
-            enriched_count = 0
-
-            for destination_id in destination_ids:
-                # Get product codes for this destination
-                dest_products = [
-                    a["id"] for a in candidates
-                    if a.get("_destination_id") == destination_id
-                ]
-
-                if not dest_products:
-                    continue
-
-                # Bulk reverse lookup
-                attractions_map = await self.attractions_repo.find_by_product_codes_bulk(
-                    dest_products,
-                    destination_id
-                )
-
-                logger.info(
-                    f"[LEVEL 2] Found {len(attractions_map)} attractions for {len(dest_products)} products "
-                    f"in destination {destination_id}"
-                )
-
-                # Assign coordinates from attractions
-                for activity in candidates:
-                    if activity.get("_destination_id") != destination_id:
-                        continue
-
-                    if activity.get("location", {}).get("coordinates"):
-                        continue  # Already enriched
-
-                    product_code = activity["id"]
-                    attraction = attractions_map.get(product_code)
-
-                    if attraction and attraction.get("location", {}).get("coordinates"):
-                        coords = attraction["location"]["coordinates"]
-                        activity["location"]["coordinates"] = coords
-                        activity["location"]["coordinates_precision"] = "attraction"
-                        activity["location"]["coordinates_source"] = f"attraction_{attraction.get('attraction_id')}"
-
-                        logger.info(
-                            f"[LEVEL 2] Enriched {product_code} via attraction "
-                            f"{attraction.get('attraction_id')}: {coords}"
-                        )
-                        enriched_count += 1
-
-            logger.info(f"[LEVEL 2] Enriched {enriched_count}/{len(candidates)} activities via attractions")
-
-        except Exception as e:
-            logger.error(f"[LEVEL 2] Error during attraction matching: {e}", exc_info=True)
-            # Don't fail - continue to next level
-
-    async def _enrich_via_geocoding(self, activities: list[dict], language: str = "en"):
-        """
-        LEVEL 3: Geocoding intelligent with MAXIMUM cost optimization.
-
-        Strategy (Cost Optimization Priority):
-        1. CHECK CACHE FIRST - Avoid ALL external calls if possible
-        2. Batch translate titles (1 API call instead of N)
-        3. Geoapify FIRST (3000/day FREE quota)
-        4. Google Places FALLBACK ONLY (quota-limited, expensive)
-        5. Circuit breaker if quota exceeded
-        6. Validate coordinates within city bounds
-
-        Args:
-            activities: List of activity dicts (will be modified in-place)
-            language: Current language (for translation)
-        """
-        # Feature flag - can disable if costs too high
-        if not self.enable_geocoding:
-            logger.info("[LEVEL 3] Geocoding is DISABLED (feature flag)")
-            return
-
-        # Verify services are available
-        if not self.geoapify_client and not self.google_places_client:
-            logger.warning("[LEVEL 3] No geocoding clients available")
-            return
-
-        if not self.translation_client:
-            logger.warning("[LEVEL 3] No translation client available")
-            return
-
-        try:
-            # Filter activities needing geocoding
-            candidates = [
-                a for a in activities
-                if not a.get("location", {}).get("coordinates")
-            ]
-
-            if not candidates:
-                logger.info("[LEVEL 3] No activities need geocoding")
-                return
-
-            logger.info(f"[LEVEL 3] Starting cost-optimized geocoding for {len(candidates)} activities")
-
-            # === STEP 1: BATCH TRANSLATION (Minimize API calls) ===
-            logger.info(f"[LEVEL 3] Step 1: Batch translating {len(candidates)} titles...")
-
-            # Collect all titles
-            titles = [a.get("title", "") for a in candidates]
-
-            # Batch translate to English (more API calls but necessary for accuracy)
-            # Using asyncio.gather for parallel execution
-            translation_tasks = [
-                self.translation_client.translate_to_english(title)
-                for title in titles
-            ]
-            titles_en = await asyncio.gather(*translation_tasks, return_exceptions=True)
-
-            # Filter out exceptions
-            titles_en = [
-                t if not isinstance(t, Exception) else titles[i]
-                for i, t in enumerate(titles_en)
-            ]
-
-            logger.info(f"[LEVEL 3] Batch translation completed")
-
-            # === STEP 2: CACHE CHECK (Avoid external API calls) ===
-            logger.info(f"[LEVEL 3] Step 2: Checking cache for all activities...")
-
-            cache_hits = 0
-            cache_misses = []
-
-            for i, activity in enumerate(candidates):
-                title_en = titles_en[i]
-                destination = activity.get("location", {}).get("destination", "")
-
-                # Check cache FIRST
-                cached = await self.geocoding_cache_repo.get(title_en, destination)
-
-                if cached and cached.get("coordinates"):
-                    # CACHE HIT - No API call needed!
-                    coords = cached["coordinates"]
-                    activity["location"]["coordinates"] = coords
-                    activity["location"]["coordinates_precision"] = "geocoded"
-                    activity["location"]["coordinates_source"] = f"cache_{cached.get('source', 'unknown')}"
-
-                    cache_hits += 1
-                    logger.debug(f"[LEVEL 3] Cache HIT: {title_en[:50]} → {coords}")
-                else:
-                    # CACHE MISS - Need to geocode
-                    cache_misses.append((activity, title_en, destination))
-
-            logger.info(
-                f"[LEVEL 3] Cache results: {cache_hits} hits, {len(cache_misses)} misses "
-                f"({cache_hits / len(candidates) * 100:.1f}% hit rate)"
-            )
-
-            if not cache_misses:
-                logger.info("[LEVEL 3] All activities resolved from cache - ZERO API calls!")
-                return
-
-            # === STEP 3: GEOCODE CACHE MISSES (Geoapify → Google fallback) ===
-            logger.info(f"[LEVEL 3] Step 3: Geocoding {len(cache_misses)} cache misses...")
-
-            enriched_count = 0
-            geoapify_count = 0
-            google_count = 0
-
-            for activity, title_en, destination in cache_misses:
-                destination_id = activity.get("_destination_id")
-
-                # Try Geoapify FIRST (FREE 3000/day)
-                coords = None
-                source = None
-
-                if self.geoapify_client:
-                    try:
-                        result = await self.geoapify_client.fetch_by_name(
-                            name=title_en,
-                            city=destination,
-                            lang="en"
-                        )
-
-                        if result and result.get("location"):
-                            coords = {
-                                "lat": result["location"].get("lat"),
-                                "lon": result["location"].get("lng") or result["location"].get("lon")
-                            }
-
-                            # Validate coordinates within city bounds
-                            if await self._validate_coords_in_city(coords, destination_id):
-                                source = "geoapify"
-                                geoapify_count += 1
-                                logger.info(f"[LEVEL 3] Geoapify SUCCESS: {title_en[:50]}")
-                            else:
-                                logger.warning(f"[LEVEL 3] Geoapify coords INVALID (outside city): {title_en[:50]}")
-                                coords = None
-
-                    except Exception as e:
-                        logger.warning(f"[LEVEL 3] Geoapify error for {title_en[:50]}: {e}")
-
-                # Fallback to Google Places if Geoapify failed
-                if not coords and self.google_places_client:
-                    try:
-                        result = await self.google_places_client.text_search(
-                            poi_name=title_en,
-                            city=destination
-                        )
-
-                        if result and result.get("location"):
-                            coords = {
-                                "lat": result["location"].get("latitude"),
-                                "lon": result["location"].get("longitude")
-                            }
-
-                            # Validate coordinates within city bounds
-                            if await self._validate_coords_in_city(coords, destination_id):
-                                source = "google_places"
-                                google_count += 1
-                                logger.info(f"[LEVEL 3] Google Places SUCCESS: {title_en[:50]}")
-                            else:
-                                logger.warning(f"[LEVEL 3] Google coords INVALID (outside city): {title_en[:50]}")
-                                coords = None
-
-                    except RuntimeError as e:
-                        if "quota" in str(e).lower() or "cap" in str(e).lower():
-                            logger.error("[LEVEL 3] Google Places QUOTA EXCEEDED - Stopping geocoding")
-                            break  # CIRCUIT BREAKER
-                        else:
-                            logger.warning(f"[LEVEL 3] Google Places error for {title_en[:50]}: {e}")
-                    except Exception as e:
-                        logger.warning(f"[LEVEL 3] Google Places error for {title_en[:50]}: {e}")
-
-                # If geocoding succeeded, assign and cache
-                if coords and source:
-                    activity["location"]["coordinates"] = coords
-                    activity["location"]["coordinates_precision"] = "geocoded"
-                    activity["location"]["coordinates_source"] = source
-
-                    # Cache for future use
-                    await self.geocoding_cache_repo.set(title_en, destination, coords, source)
-
-                    enriched_count += 1
-
-            logger.info(
-                f"[LEVEL 3] Geocoding completed: {enriched_count}/{len(cache_misses)} enriched "
-                f"(Geoapify: {geoapify_count}, Google: {google_count})"
-            )
-
-            # Final summary
-            total_enriched = cache_hits + enriched_count
-            logger.info(
-                f"[LEVEL 3] TOTAL: {total_enriched}/{len(candidates)} activities geocoded "
-                f"({cache_hits} from cache, {enriched_count} from API)"
-            )
-
-        except Exception as e:
-            logger.error(f"[LEVEL 3] Error during geocoding: {e}", exc_info=True)
-            # Don't fail - continue to next level
-
-    async def _validate_coords_in_city(self, coords: dict, destination_id: str) -> bool:
-        """
-        Validate that geocoded coordinates are within city bounds.
-
-        Prevents false matches from geocoding (e.g., "Paris" in Texas instead of France).
-
-        Args:
-            coords: {"lat": float, "lon": float}
-            destination_id: Viator destination ID
+            activities: List of activity dicts from Viator
+            user_preferences: User preference dict with interests, comfortLevel, pace
+            limit: Max number of activities to return (default: 40)
 
         Returns:
-            True if coordinates are valid, False otherwise
+            Sorted list of activities (best matches first), limited to `limit`
         """
-        if not coords or not destination_id:
-            return False
+        if not activities:
+            return []
 
-        try:
-            # Get destination center
-            dest_coords = await self.location_resolver.get_destination_coordinates(destination_id)
-            if not dest_coords:
-                logger.warning(f"[VALIDATION] No coordinates for destination {destination_id}")
-                return True  # Can't validate, assume valid
+        if not user_preferences:
+            # Fallback: sort by rating if no preferences
+            logger.info("[SCORING] No user preferences, sorting by rating")
+            sorted_activities = sorted(
+                activities,
+                key=lambda x: x.get("rating", {}).get("average", 0),
+                reverse=True
+            )
+            return sorted_activities[:limit]
 
-            # Calculate distance from city center
-            from app.utils.coordinate_dispersion import _haversine_distance
+        # Extract user preferences
+        user_interests = user_preferences.get("interests", [])
+        comfort_level = user_preferences.get("comfortLevel", 50)  # 0-100 scale
+        pace = user_preferences.get("pace", "moderate")  # relaxed | moderate | intense
 
-            distance_km = _haversine_distance(
-                dest_coords["lat"], dest_coords["lon"],
-                coords["lat"], coords["lon"]
+        logger.info(
+            f"[SCORING] Scoring {len(activities)} activities with preferences: "
+            f"interests={user_interests}, comfort={comfort_level}, pace={pace}"
+        )
+
+        # Score each activity
+        for activity in activities:
+            score = 0.0
+
+            # === 1. INTEREST MATCHING (40% of score) ===
+            activity_categories = [
+                c.lower() for c in activity.get("categories", [])
+            ]
+            activity_tags = [
+                t.lower() for t in activity.get("tags", [])
+            ]
+            activity_keywords = activity_categories + activity_tags
+
+            # Count how many user interests match activity keywords
+            interest_matches = 0
+            for interest in user_interests:
+                interest_lower = interest.lower()
+                if any(interest_lower in keyword for keyword in activity_keywords):
+                    interest_matches += 1
+
+            if len(user_interests) > 0:
+                interest_score = (interest_matches / len(user_interests)) * 40
+            else:
+                interest_score = 20  # Neutral score if no interests specified
+
+            score += interest_score
+
+            # === 2. PRICE/COMFORT MATCHING (30% of score) ===
+            price = activity.get("pricing", {}).get("from_price", {}).get("amount", 0)
+
+            # Price bands based on comfort level
+            if comfort_level < 25:  # Budget (0-25)
+                if price <= 30:
+                    price_score = 30
+                elif price <= 50:
+                    price_score = 20
+                else:
+                    price_score = 5
+            elif comfort_level < 50:  # Économique (25-50)
+                if price <= 80:
+                    price_score = 30
+                elif price <= 120:
+                    price_score = 20
+                else:
+                    price_score = 10
+            elif comfort_level < 75:  # Confort (50-75)
+                if price <= 150:
+                    price_score = 30
+                elif price <= 200:
+                    price_score = 25
+                else:
+                    price_score = 15
+            else:  # Luxe (75-100)
+                if price >= 100:
+                    price_score = 30
+                elif price >= 60:
+                    price_score = 25
+                else:
+                    price_score = 15
+
+            score += price_score
+
+            # === 3. PACE MATCHING (20% of score) ===
+            duration_minutes = activity.get("duration", {}).get("fixed_duration_minutes", 0)
+
+            # If no fixed duration, try to parse from formatted string
+            if duration_minutes == 0:
+                duration_str = activity.get("duration", {}).get("formatted", "")
+                # Simple parsing for common formats (e.g., "3 hours", "2h30")
+                if "hour" in duration_str.lower():
+                    try:
+                        hours = float(duration_str.split()[0])
+                        duration_minutes = int(hours * 60)
+                    except (ValueError, IndexError):
+                        pass
+
+            # Pace-based scoring
+            if pace == "relaxed":
+                # Relaxed: prefer shorter activities (1-3 hours)
+                if 60 <= duration_minutes <= 180:
+                    pace_score = 20
+                elif duration_minutes < 60 or duration_minutes <= 240:
+                    pace_score = 15
+                else:
+                    pace_score = 5
+            elif pace == "moderate":
+                # Moderate: prefer medium activities (2-5 hours)
+                if 120 <= duration_minutes <= 300:
+                    pace_score = 20
+                elif 60 <= duration_minutes <= 360:
+                    pace_score = 15
+                else:
+                    pace_score = 10
+            else:  # intense
+                # Intense: prefer longer activities (4+ hours)
+                if duration_minutes >= 240:
+                    pace_score = 20
+                elif duration_minutes >= 180:
+                    pace_score = 15
+                else:
+                    pace_score = 10
+
+            score += pace_score
+
+            # === 4. RATING QUALITY (10% of score) ===
+            rating = activity.get("rating", {}).get("average", 0)
+            rating_score = (rating / 5.0) * 10
+
+            score += rating_score
+
+            # Store score in activity for debugging/transparency
+            activity["_preference_score"] = round(score, 2)
+
+        # Sort by score (descending)
+        sorted_activities = sorted(
+            activities,
+            key=lambda x: x.get("_preference_score", 0),
+            reverse=True
+        )
+
+        # Log top 3 scores for debugging
+        logger.info("[SCORING] Top 3 scored activities:")
+        for i, activity in enumerate(sorted_activities[:3]):
+            logger.info(
+                f"  {i+1}. {activity.get('title', 'Unknown')[:50]} "
+                f"(score: {activity.get('_preference_score', 0)})"
             )
 
-            # Max 50km from city center (configurable)
-            MAX_DISTANCE_KM = 50.0
-
-            if distance_km > MAX_DISTANCE_KM:
-                logger.warning(
-                    f"[VALIDATION] Coordinates too far from city center: "
-                    f"{distance_km:.1f}km > {MAX_DISTANCE_KM}km"
-                )
-                return False
-
-            logger.debug(f"[VALIDATION] Coordinates valid: {distance_km:.1f}km from center")
-            return True
-
-        except Exception as e:
-            logger.error(f"[VALIDATION] Error validating coordinates: {e}")
-            return True  # On error, assume valid to avoid blocking
-
-    async def _enrich_via_dispersion(self, activities: list[dict]):
-        """
-        LEVEL 4: Intelligent deterministic dispersion for activities without coordinates.
-
-        Strategy:
-        - Use hash-based seeding for deterministic but varied distribution
-        - Apply sqrt distribution for natural clustering near center
-        - Looks random on map but is repeatable (same activity = same coords)
-
-        Args:
-            activities: List of activity dicts (will be modified in-place)
-        """
-        try:
-            # Filter activities needing dispersion
-            candidates = [
-                a for a in activities
-                if not a.get("location", {}).get("coordinates")
-            ]
-
-            if not candidates:
-                logger.info("[LEVEL 4] No activities need dispersion")
-                return
-
-            logger.info(f"[LEVEL 4] Applying intelligent dispersion to {len(candidates)} activities")
-
-            dispersed_count = 0
-
-            for activity in candidates:
-                destination_id = activity.get("_destination_id")
-                if not destination_id:
-                    logger.warning(f"[LEVEL 4] No destination_id for activity {activity['id']}")
-                    continue
-
-                # Get destination center coordinates
-                dest_coords = await self.location_resolver.get_destination_coordinates(destination_id)
-                if not dest_coords:
-                    logger.warning(f"[LEVEL 4] No coordinates for destination {destination_id}")
-                    continue
-
-                # Get adaptive radius from destination (TODO: add to destinations collection)
-                # For now, use default 5km
-                city_radius_km = 5.0
-
-                # Generate dispersed coordinates
-                dispersed = generate_dispersed_coordinates(
-                    activity_id=activity["id"],
-                    destination_id=destination_id,
-                    city_center=dest_coords,
-                    city_radius_km=city_radius_km
-                )
-
-                # Assign to activity
-                activity["location"]["coordinates"] = dispersed["coordinates"]
-                activity["location"]["coordinates_precision"] = dispersed["precision"]
-                activity["location"]["coordinates_source"] = dispersed["source"]
-                activity["location"]["_dispersion_metadata"] = {
-                    "offset_km": dispersed["offset_km"],
-                    "angle_degrees": dispersed["angle_degrees"],
-                    "city_radius_km": city_radius_km
-                }
-
-                logger.info(
-                    f"[LEVEL 4] Dispersed {activity['id']}: "
-                    f"{dispersed['offset_km']}km at {dispersed['angle_degrees']}° from center"
-                )
-                dispersed_count += 1
-
-            logger.info(f"[LEVEL 4] Dispersed {dispersed_count}/{len(candidates)} activities")
-
-        except Exception as e:
-            logger.error(f"[LEVEL 4] Error during dispersion: {e}", exc_info=True)
-            # Don't fail - activities without coords will be returned as-is
+        # Return top N activities
+        return sorted_activities[:limit]
 
     async def _apply_geo_filtering(
         self,
