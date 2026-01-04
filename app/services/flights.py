@@ -573,62 +573,75 @@ class FlightsService:
         currency: str
     ) -> Optional[dict]:
         """
-        Fetch cheapest price for a single origin-destination pair over date range.
+        Fetch cheapest price for a single origin-destination pair.
 
-        Uses getCalendarPicker API to get prices for all dates, returns minimum with date.
+        Uses searchFlights API to get the cheapest price for a specific date.
 
         Returns:
             {"price": float, "date": str} or None if no flights available
         """
+        # Use a date 2-3 weeks out for better availability
+        search_date = start_date + timedelta(days=14)
+
         params = {
             "departure_id": origin,
             "arrival_id": destination,
-            "outbound_date": start_date.strftime("%Y-%m-%d"),
-            "start_date": start_date.strftime("%Y-%m-%d"),
-            "end_date": end_date.strftime("%Y-%m-%d"),
+            "outbound_date": search_date.strftime("%Y-%m-%d"),
             "adults": str(adults),
             "children": "0",
             "infant_in_seat": "0",
             "infant_on_lap": "0",
-            "trip_type": "ONE_WAY",
-            "trip_days": "1",
             "travel_class": "ECONOMY",
+            "show_hidden": "false",
             "currency": currency,
+            "language_code": "en-US",
             "country_code": "US",
         }
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.get(
-                f"{self.BASE_URL}/getCalendarPicker",
-                headers=self._headers,
-                params=params
-            )
-            response.raise_for_status()
-            data = response.json()
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                response = await client.get(
+                    f"{self.BASE_URL}/searchFlights",
+                    headers=self._headers,
+                    params=params
+                )
+                response.raise_for_status()
+                data = response.json()
 
-        # Check API response status
-        if not data.get("status"):
-            logger.warning(f"API error for {origin} -> {destination}: {data.get('message')}")
+            # Check API response status
+            if not data.get("status"):
+                logger.warning(f"API error for {origin} -> {destination}: {data.get('message')}")
+                return None
+
+            # Extract best flights
+            best_flights = data.get("data", {}).get("best_flights", [])
+            other_flights = data.get("data", {}).get("other_flights", [])
+            all_flights = best_flights + other_flights
+
+            if not all_flights:
+                logger.info(f"No flights found: {origin} -> {destination}")
+                return None
+
+            # Find the cheapest price
+            prices = []
+            for flight in all_flights:
+                price = flight.get("price")
+                if price is not None:
+                    prices.append(price)
+
+            if not prices:
+                return None
+
+            cheapest_price = min(prices)
+
+            return {
+                "price": cheapest_price,
+                "date": search_date.strftime("%Y-%m-%d")
+            }
+
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error {origin} -> {destination}: {e.response.status_code}")
             return None
-
-        # Extract prices and find minimum with its date
-        api_data = data.get("data", [])
-        if not api_data:
+        except Exception as e:
+            logger.error(f"Error fetching price {origin} -> {destination}: {e}")
             return None
-
-        # Filter valid entries and find the cheapest
-        valid_entries = [
-            item for item in api_data
-            if item.get("price") is not None and item.get("departure")
-        ]
-
-        if not valid_entries:
-            return None
-
-        # Find the entry with minimum price
-        cheapest = min(valid_entries, key=lambda x: x["price"])
-
-        return {
-            "price": cheapest["price"],
-            "date": cheapest["departure"]  # Format: "YYYY-MM-DD"
-        }
