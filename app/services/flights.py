@@ -473,8 +473,10 @@ class FlightsService:
         """
         Get cheapest flight prices over next 3 months for multiple destinations.
 
-        Uses parallel execution with semaphore-based concurrency control.
-        Caches each origin-destination pair individually for 30 minutes.
+        Optimized flow:
+        1. Check cache for ALL destinations first (sync, fast)
+        2. Only make API calls for uncached destinations (async, parallel)
+        3. Merge results
 
         Args:
             origin: Origin IATA code
@@ -490,78 +492,103 @@ class FlightsService:
         end_date = today + timedelta(days=90)
 
         results: dict[str, Optional[dict]] = {}
-        cached_count = 0
-        fetched_count = 0
+        to_fetch: list[str] = []
 
-        semaphore = asyncio.Semaphore(self.MAP_PRICES_CONCURRENCY)
-
-        async def fetch_price(destination: str) -> tuple[str, Optional[dict], bool]:
-            """Fetch price for single destination."""
-            nonlocal cached_count, fetched_count
-
-            # Cache key
-            cache_params = {
-                "origin": origin,
-                "destination": destination,
-                "adults": adults,
-                "currency": currency,
-                "date_range": f"{today.isoformat()}_{end_date.isoformat()}"
-            }
-
-            # Check cache
+        # Phase 1: Check cache for all destinations (fast, synchronous)
+        for destination in destinations:
+            cache_params = self._build_map_price_cache_key(
+                origin, destination, adults, currency, today, end_date
+            )
             cached = self._redis.get("map_price", cache_params)
+
             if cached is not None:
-                logger.info(f"Cache HIT: {origin} -> {destination}")
-                # Return cached data (could be None or {"price": x, "date": y})
-                return (destination, cached.get("data"), True)
-
-            # Fetch from API with semaphore
-            async with semaphore:
-                try:
-                    result = await self._fetch_cheapest_price_async(
-                        origin, destination, today, end_date, adults, currency
-                    )
-
-                    # Cache result (including None)
-                    self._redis.set(
-                        "map_price",
-                        cache_params,
-                        {"data": result},
-                        ttl_seconds=self.MAP_PRICES_CACHE_TTL
-                    )
-
-                    if result:
-                        logger.info(f"Fetched: {origin} -> {destination} = {result['price']} {currency} on {result['date']}")
-                    else:
-                        logger.info(f"Fetched: {origin} -> {destination} = No flights available")
-                    return (destination, result, False)
-
-                except Exception as e:
-                    logger.error(f"Error {origin} -> {destination}: {e}")
-                    return (destination, None, False)
-
-        # Execute all in parallel
-        tasks = [fetch_price(dest) for dest in destinations]
-        results_list = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Process results
-        for result in results_list:
-            if isinstance(result, Exception):
-                logger.error(f"Task exception: {result}")
-                continue
-            dest, price_data, from_cache = result
-            results[dest] = price_data
-            if from_cache:
-                cached_count += 1
+                # Cache hit - add to results immediately
+                results[destination] = cached.get("data")
+                logger.debug(f"Cache HIT: {origin} -> {destination}")
             else:
-                fetched_count += 1
+                # Cache miss - need to fetch
+                to_fetch.append(destination)
 
+        cached_count = len(results)
         logger.info(
-            f"Map prices: {len(results)} destinations "
+            f"Map prices cache check: {cached_count}/{len(destinations)} cached, "
+            f"{len(to_fetch)} to fetch"
+        )
+
+        # Phase 2: Fetch only uncached destinations in parallel
+        if to_fetch:
+            semaphore = asyncio.Semaphore(self.MAP_PRICES_CONCURRENCY)
+
+            async def fetch_and_cache(destination: str) -> tuple[str, Optional[dict]]:
+                """Fetch price and cache result."""
+                async with semaphore:
+                    try:
+                        result = await self._fetch_cheapest_price_async(
+                            origin, destination, today, end_date, adults, currency
+                        )
+
+                        # Cache result (including None for no flights)
+                        cache_params = self._build_map_price_cache_key(
+                            origin, destination, adults, currency, today, end_date
+                        )
+                        self._redis.set(
+                            "map_price",
+                            cache_params,
+                            {"data": result},
+                            ttl_seconds=self.MAP_PRICES_CACHE_TTL
+                        )
+
+                        if result:
+                            logger.info(
+                                f"Fetched: {origin} -> {destination} = "
+                                f"{result['price']} {currency} on {result['date']}"
+                            )
+                        else:
+                            logger.info(f"Fetched: {origin} -> {destination} = No flights")
+
+                        return (destination, result)
+
+                    except Exception as e:
+                        logger.error(f"Error {origin} -> {destination}: {e}")
+                        return (destination, None)
+
+            # Execute API calls in parallel
+            tasks = [fetch_and_cache(dest) for dest in to_fetch]
+            fetched_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Merge fetched results
+            for result in fetched_results:
+                if isinstance(result, Exception):
+                    logger.error(f"Task exception: {result}")
+                    continue
+                dest, price_data = result
+                results[dest] = price_data
+
+        fetched_count = len(to_fetch)
+        logger.info(
+            f"Map prices complete: {len(results)} destinations "
             f"({cached_count} cached, {fetched_count} fetched)"
         )
 
         return results, cached_count, fetched_count
+
+    def _build_map_price_cache_key(
+        self,
+        origin: str,
+        destination: str,
+        adults: int,
+        currency: str,
+        start_date: date,
+        end_date: date
+    ) -> dict:
+        """Build cache key parameters for map price lookup."""
+        return {
+            "origin": origin,
+            "destination": destination,
+            "adults": adults,
+            "currency": currency,
+            "date_range": f"{start_date.isoformat()}_{end_date.isoformat()}"
+        }
 
     async def _fetch_cheapest_price_async(
         self,
