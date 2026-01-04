@@ -101,10 +101,11 @@ async def startup_event() -> None:
         token=settings.upstash_redis_rest_token
     )
 
-    # Initialize flights service with Redis cache
+    # Initialize flights service with Redis cache and MongoDB
     app.state.flights_service = FlightsService(
         api_key=settings.google_flight_api_key,
-        redis_cache=app.state.redis_cache
+        redis_cache=app.state.redis_cache,
+        mongo_manager=app.state.mongo_manager
     )
 
     # Initialize POI enrichment services

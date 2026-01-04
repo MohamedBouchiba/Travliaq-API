@@ -24,6 +24,7 @@ from app.models.flights import (
 
 if TYPE_CHECKING:
     from app.services.redis_cache import RedisCache
+    from app.db.mongo import MongoManager
 
 logger = logging.getLogger(__name__)
 
@@ -33,19 +34,26 @@ class FlightsService:
 
     BASE_URL = "https://google-flights2.p.rapidapi.com/api/v1"
     CACHE_TTL = 86400  # 24 hours in seconds
-    MAP_PRICES_CACHE_TTL = 1800  # 30 minutes
+    MAP_PRICES_CACHE_TTL = 172800  # 2 days in seconds
     MAP_PRICES_CONCURRENCY = 10  # Max concurrent API calls
 
-    def __init__(self, api_key: str, redis_cache: "RedisCache"):
+    def __init__(
+        self,
+        api_key: str,
+        redis_cache: "RedisCache",
+        mongo_manager: "MongoManager" = None
+    ):
         """
         Initialize the flights service.
 
         Args:
             api_key: RapidAPI key for Google Flights API
             redis_cache: Redis cache instance for caching results
+            mongo_manager: MongoDB manager for persistent storage
         """
         self._api_key = api_key
         self._redis = redis_cache
+        self._mongo = mongo_manager
         self._headers = {
             "x-rapidapi-key": api_key,
             "x-rapidapi-host": "google-flights2.p.rapidapi.com"
@@ -662,10 +670,22 @@ class FlightsService:
             # Find the entry with minimum price
             cheapest = min(valid_entries, key=lambda x: x["price"])
 
-            return {
+            result = {
                 "price": cheapest["price"],
                 "date": cheapest["departure"]  # Format: "YYYY-MM-DD"
             }
+
+            # Save to MongoDB for historical data
+            await self._save_flight_prices_to_mongo(
+                origin=origin,
+                destination=destination,
+                adults=adults,
+                currency=currency,
+                cheapest_price=result,
+                all_prices=valid_entries
+            )
+
+            return result
 
         except httpx.HTTPStatusError as e:
             logger.error(f"HTTP error {origin} -> {destination}: {e.response.status_code} - {e.response.text[:200]}")
@@ -673,3 +693,54 @@ class FlightsService:
         except Exception as e:
             logger.error(f"Error fetching price {origin} -> {destination}: {e}", exc_info=True)
             return None
+
+    async def _save_flight_prices_to_mongo(
+        self,
+        origin: str,
+        destination: str,
+        adults: int,
+        currency: str,
+        cheapest_price: dict,
+        all_prices: list[dict]
+    ) -> None:
+        """
+        Save flight price data to MongoDB for historical analysis.
+
+        Creates/updates a document with:
+        - Route info (origin, destination)
+        - Current cheapest price
+        - All available prices from the API
+        - Timestamp of the fetch
+        """
+        if not self._mongo:
+            return
+
+        try:
+            db = self._mongo.client[self._mongo._settings.mongodb_db]
+            collection = db["flight_prices"]
+
+            doc = {
+                "route_key": f"{origin}_{destination}",
+                "origin": origin,
+                "destination": destination,
+                "adults": adults,
+                "currency": currency,
+                "cheapest_price": cheapest_price["price"],
+                "cheapest_date": cheapest_price["date"],
+                "all_prices": all_prices,
+                "fetched_at": datetime.utcnow(),
+                "prices_count": len(all_prices)
+            }
+
+            # Upsert: update if exists, insert if not
+            await collection.update_one(
+                {"route_key": f"{origin}_{destination}", "currency": currency},
+                {"$set": doc},
+                upsert=True
+            )
+
+            logger.debug(f"Saved to MongoDB: {origin} -> {destination} ({len(all_prices)} prices)")
+
+        except Exception as e:
+            # Don't fail the main operation if MongoDB save fails
+            logger.error(f"Failed to save to MongoDB: {e}")
