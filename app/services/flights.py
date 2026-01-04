@@ -573,39 +573,41 @@ class FlightsService:
         currency: str
     ) -> Optional[dict]:
         """
-        Fetch cheapest price for a single origin-destination pair.
+        Fetch cheapest price for a single origin-destination pair over date range.
 
-        Uses searchFlights API to get the cheapest price for a specific date.
+        Uses getCalendarPicker API to get prices for all dates, returns minimum with date.
 
         Returns:
             {"price": float, "date": str} or None if no flights available
         """
-        # Use a date 2-3 weeks out for better availability
-        search_date = start_date + timedelta(days=14)
-
         params = {
             "departure_id": origin,
             "arrival_id": destination,
-            "outbound_date": search_date.strftime("%Y-%m-%d"),
+            "start_date": start_date.strftime("%Y-%m-%d"),
+            "end_date": end_date.strftime("%Y-%m-%d"),
             "adults": str(adults),
-            "children": "0",
-            "infant_in_seat": "0",
-            "infant_on_lap": "0",
+            "trip_type": "ONE_WAY",
             "travel_class": "ECONOMY",
-            "show_hidden": "false",
             "currency": currency,
-            "language_code": "en-US",
             "country_code": "US",
         }
 
         try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
+            logger.info(f"Calling getCalendarPicker: {origin} -> {destination}")
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
-                    f"{self.BASE_URL}/searchFlights",
+                    f"{self.BASE_URL}/getCalendarPicker",
                     headers=self._headers,
                     params=params
                 )
-                response.raise_for_status()
+
+                logger.info(f"Response status: {response.status_code} for {origin} -> {destination}")
+
+                if response.status_code != 200:
+                    logger.error(f"HTTP {response.status_code}: {response.text[:500]}")
+                    return None
+
                 data = response.json()
 
             # Check API response status
@@ -613,35 +615,34 @@ class FlightsService:
                 logger.warning(f"API error for {origin} -> {destination}: {data.get('message')}")
                 return None
 
-            # Extract best flights
-            best_flights = data.get("data", {}).get("best_flights", [])
-            other_flights = data.get("data", {}).get("other_flights", [])
-            all_flights = best_flights + other_flights
+            # Extract prices and find minimum with its date
+            api_data = data.get("data", [])
+            logger.info(f"Got {len(api_data)} price entries for {origin} -> {destination}")
 
-            if not all_flights:
-                logger.info(f"No flights found: {origin} -> {destination}")
+            if not api_data:
                 return None
 
-            # Find the cheapest price
-            prices = []
-            for flight in all_flights:
-                price = flight.get("price")
-                if price is not None:
-                    prices.append(price)
+            # Filter valid entries and find the cheapest
+            valid_entries = [
+                item for item in api_data
+                if item.get("price") is not None and item.get("departure")
+            ]
 
-            if not prices:
+            if not valid_entries:
+                logger.warning(f"No valid price entries for {origin} -> {destination}")
                 return None
 
-            cheapest_price = min(prices)
+            # Find the entry with minimum price
+            cheapest = min(valid_entries, key=lambda x: x["price"])
 
             return {
-                "price": cheapest_price,
-                "date": search_date.strftime("%Y-%m-%d")
+                "price": cheapest["price"],
+                "date": cheapest["departure"]  # Format: "YYYY-MM-DD"
             }
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error {origin} -> {destination}: {e.response.status_code}")
+            logger.error(f"HTTP error {origin} -> {destination}: {e.response.status_code} - {e.response.text[:200]}")
             return None
         except Exception as e:
-            logger.error(f"Error fetching price {origin} -> {destination}: {e}")
+            logger.error(f"Error fetching price {origin} -> {destination}: {e}", exc_info=True)
             return None
