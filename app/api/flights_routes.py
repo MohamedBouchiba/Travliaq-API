@@ -339,7 +339,7 @@ async def get_map_prices(
             if data is not None:
                 prices[iata] = DestinationPrice(
                     price=data["price"],
-                    date=datetime.strptime(data["date"], "%Y-%m-%d").date()
+                    flight_date=datetime.strptime(data["date"], "%Y-%m-%d").date()
                 )
             else:
                 prices[iata] = None

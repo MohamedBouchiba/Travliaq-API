@@ -167,8 +167,10 @@ class CalendarPricesResponse(BaseModel):
 
 class DestinationPrice(BaseModel):
     """Price and date for a destination."""
+    model_config = {"populate_by_name": True}
+
     price: float = Field(..., description="Cheapest price found")
-    date: date = Field(..., description="Date of the cheapest flight")
+    flight_date: date = Field(..., description="Date of the cheapest flight", serialization_alias="date")
 
 
 class MapPricesRequest(BaseModel):
