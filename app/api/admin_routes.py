@@ -65,6 +65,25 @@ async def cleanup_cache() -> dict:
     return {"message": "Expired cache entries removed successfully"}
 
 
+@router.post("/cache/clear-map-prices")
+async def clear_map_prices_cache(request: Request) -> dict:
+    """
+    Clear all map-prices cache entries from Redis.
+
+    This endpoint removes all cached flight prices for the /map-prices endpoint.
+    Use this to force refresh all map price data.
+
+    Returns:
+        Number of keys deleted
+    """
+    redis_cache = request.app.state.redis_cache
+    deleted = redis_cache.clear_pattern("map_price:*")
+    return {
+        "message": f"Map prices cache cleared successfully",
+        "keys_deleted": deleted
+    }
+
+
 @router.get("/health")
 async def health_check() -> dict:
     """
