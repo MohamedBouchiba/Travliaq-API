@@ -1,6 +1,6 @@
 """Flight search and calendar pricing models."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import date
 from enum import Enum
@@ -161,3 +161,52 @@ class CalendarPricesResponse(BaseModel):
     prices: list[DailyPrice] = Field(..., description="List of prices by date")
     currency: str = Field(..., description="Currency code")
     trip_type: str = Field(..., description="Trip type (ONE_WAY or ROUND)")
+
+
+# ========== Map Prices Models ==========
+
+class DestinationPrice(BaseModel):
+    """Price and date for a destination."""
+    price: float = Field(..., description="Cheapest price found")
+    date: date = Field(..., description="Date of the cheapest flight")
+
+
+class MapPricesRequest(BaseModel):
+    """Request model for map prices endpoint."""
+    origin: str = Field(
+        ...,
+        description="IATA code of origin airport (e.g., 'CDG')",
+        min_length=3,
+        max_length=3
+    )
+    destinations: list[str] = Field(
+        ...,
+        description="List of destination IATA codes (max 50)",
+        min_length=1,
+        max_length=50
+    )
+    adults: int = Field(1, ge=1, le=9, description="Number of adults")
+    currency: str = Field("EUR", description="Currency code")
+
+    @field_validator('origin')
+    @classmethod
+    def validate_origin(cls, v):
+        return v.upper()
+
+    @field_validator('destinations')
+    @classmethod
+    def validate_destinations(cls, v):
+        return [code.upper() for code in v]
+
+
+class MapPricesResponse(BaseModel):
+    """Response model for map prices endpoint."""
+    success: bool = True
+    prices: dict[str, Optional[DestinationPrice]] = Field(
+        ...,
+        description="IATA code -> {price, date} (null if unavailable)"
+    )
+    currency: str
+    origin: str
+    cached_destinations: int = 0
+    fetched_destinations: int = 0

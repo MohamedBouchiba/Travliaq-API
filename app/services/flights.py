@@ -1,9 +1,10 @@
 """Service for Google Flights API integration."""
 
 from __future__ import annotations
+import asyncio
 import logging
 from typing import Optional, TYPE_CHECKING
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import httpx
 
 from app.models.flights import (
@@ -32,6 +33,8 @@ class FlightsService:
 
     BASE_URL = "https://google-flights2.p.rapidapi.com/api/v1"
     CACHE_TTL = 86400  # 24 hours in seconds
+    MAP_PRICES_CACHE_TTL = 1800  # 30 minutes
+    MAP_PRICES_CONCURRENCY = 10  # Max concurrent API calls
 
     def __init__(self, api_key: str, redis_cache: "RedisCache"):
         """
@@ -459,3 +462,173 @@ class FlightsService:
         except Exception as e:
             logger.error(f"Error getting calendar prices: {e}", exc_info=True)
             return None
+
+    async def get_map_prices(
+        self,
+        origin: str,
+        destinations: list[str],
+        adults: int = 1,
+        currency: str = "EUR"
+    ) -> tuple[dict[str, Optional[dict]], int, int]:
+        """
+        Get cheapest flight prices over next 3 months for multiple destinations.
+
+        Uses parallel execution with semaphore-based concurrency control.
+        Caches each origin-destination pair individually for 30 minutes.
+
+        Args:
+            origin: Origin IATA code
+            destinations: List of destination IATA codes
+            adults: Number of adult passengers
+            currency: Currency code
+
+        Returns:
+            Tuple of (prices_dict, cached_count, fetched_count)
+            prices_dict: {destination: {"price": float, "date": str} | None}
+        """
+        today = date.today()
+        end_date = today + timedelta(days=90)
+
+        results: dict[str, Optional[dict]] = {}
+        cached_count = 0
+        fetched_count = 0
+
+        semaphore = asyncio.Semaphore(self.MAP_PRICES_CONCURRENCY)
+
+        async def fetch_price(destination: str) -> tuple[str, Optional[dict], bool]:
+            """Fetch price for single destination."""
+            nonlocal cached_count, fetched_count
+
+            # Cache key
+            cache_params = {
+                "origin": origin,
+                "destination": destination,
+                "adults": adults,
+                "currency": currency,
+                "date_range": f"{today.isoformat()}_{end_date.isoformat()}"
+            }
+
+            # Check cache
+            cached = self._redis.get("map_price", cache_params)
+            if cached is not None:
+                logger.info(f"Cache HIT: {origin} -> {destination}")
+                # Return cached data (could be None or {"price": x, "date": y})
+                return (destination, cached.get("data"), True)
+
+            # Fetch from API with semaphore
+            async with semaphore:
+                try:
+                    result = await self._fetch_cheapest_price_async(
+                        origin, destination, today, end_date, adults, currency
+                    )
+
+                    # Cache result (including None)
+                    self._redis.set(
+                        "map_price",
+                        cache_params,
+                        {"data": result},
+                        ttl_seconds=self.MAP_PRICES_CACHE_TTL
+                    )
+
+                    if result:
+                        logger.info(f"Fetched: {origin} -> {destination} = {result['price']} {currency} on {result['date']}")
+                    else:
+                        logger.info(f"Fetched: {origin} -> {destination} = No flights available")
+                    return (destination, result, False)
+
+                except Exception as e:
+                    logger.error(f"Error {origin} -> {destination}: {e}")
+                    return (destination, None, False)
+
+        # Execute all in parallel
+        tasks = [fetch_price(dest) for dest in destinations]
+        results_list = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Process results
+        for result in results_list:
+            if isinstance(result, Exception):
+                logger.error(f"Task exception: {result}")
+                continue
+            dest, price_data, from_cache = result
+            results[dest] = price_data
+            if from_cache:
+                cached_count += 1
+            else:
+                fetched_count += 1
+
+        logger.info(
+            f"Map prices: {len(results)} destinations "
+            f"({cached_count} cached, {fetched_count} fetched)"
+        )
+
+        return results, cached_count, fetched_count
+
+    async def _fetch_cheapest_price_async(
+        self,
+        origin: str,
+        destination: str,
+        start_date: date,
+        end_date: date,
+        adults: int,
+        currency: str
+    ) -> Optional[dict]:
+        """
+        Fetch cheapest price for a single origin-destination pair over date range.
+
+        Uses getCalendarPicker API to get prices for all dates, returns minimum with date.
+
+        Returns:
+            {"price": float, "date": str} or None if no flights available
+        """
+        params = {
+            "departure_id": origin,
+            "arrival_id": destination,
+            "outbound_date": start_date.strftime("%Y-%m-%d"),
+            "start_date": start_date.strftime("%Y-%m-%d"),
+            "end_date": end_date.strftime("%Y-%m-%d"),
+            "adults": str(adults),
+            "children": "0",
+            "infant_in_seat": "0",
+            "infant_on_lap": "0",
+            "trip_type": "ONE_WAY",
+            "trip_days": "1",
+            "travel_class": "ECONOMY",
+            "currency": currency,
+            "country_code": "US",
+        }
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                f"{self.BASE_URL}/getCalendarPicker",
+                headers=self._headers,
+                params=params
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        # Check API response status
+        if not data.get("status"):
+            logger.warning(f"API error for {origin} -> {destination}: {data.get('message')}")
+            return None
+
+        # Extract prices and find minimum with its date
+        api_data = data.get("data", [])
+        if not api_data:
+            return None
+
+        # Filter valid entries and find the cheapest
+        valid_entries = [
+            item for item in api_data
+            if item.get("price") is not None and item.get("departure")
+        ]
+
+        if not valid_entries:
+            return None
+
+        # Find the entry with minimum price
+        cheapest = min(valid_entries, key=lambda x: x["price"])
+
+        return {
+            "price": cheapest["price"],
+            "date": cheapest["departure"]  # Format: "YYYY-MM-DD"
+        }
