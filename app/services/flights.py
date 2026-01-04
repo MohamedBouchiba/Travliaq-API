@@ -36,6 +36,7 @@ class FlightsService:
     CACHE_TTL = 86400  # 24 hours in seconds
     MAP_PRICES_CACHE_TTL = 172800  # 2 days in seconds
     MAP_PRICES_CONCURRENCY = 10  # Max concurrent API calls
+    INVALID_ROUTE_TTL_DAYS = 30  # Recheck invalid routes after 30 days
 
     def __init__(
         self,
@@ -523,7 +524,22 @@ class FlightsService:
             f"{len(to_fetch)} to fetch"
         )
 
-        # Phase 2: Fetch only uncached destinations in parallel
+        # Phase 2: Check MongoDB for known invalid routes (no flights)
+        skipped_count = 0
+        if to_fetch:
+            invalid_routes = await self._get_invalid_routes(origin, to_fetch)
+            if invalid_routes:
+                # Mark invalid routes as None and remove from to_fetch
+                for dest in invalid_routes:
+                    results[dest] = None
+                    to_fetch.remove(dest)
+                skipped_count = len(invalid_routes)
+                logger.info(
+                    f"Skipped {skipped_count} known invalid routes, "
+                    f"{len(to_fetch)} remaining to fetch"
+                )
+
+        # Phase 3: Fetch only valid uncached destinations in parallel
         if to_fetch:
             semaphore = asyncio.Semaphore(self.MAP_PRICES_CONCURRENCY)
 
@@ -552,7 +568,9 @@ class FlightsService:
                                 f"{result['price']} {currency} on {result['date']}"
                             )
                         else:
-                            logger.info(f"Fetched: {origin} -> {destination} = No flights")
+                            # No flights - save to MongoDB invalid routes
+                            logger.info(f"Fetched: {origin} -> {destination} = No flights (saving to blacklist)")
+                            await self._save_invalid_route(origin, destination)
 
                         return (destination, result)
 
@@ -575,7 +593,7 @@ class FlightsService:
         fetched_count = len(to_fetch)
         logger.info(
             f"Map prices complete: {len(results)} destinations "
-            f"({cached_count} cached, {fetched_count} fetched)"
+            f"({cached_count} cached, {skipped_count} blacklisted, {fetched_count} fetched)"
         )
 
         return results, cached_count, fetched_count
@@ -760,3 +778,85 @@ class FlightsService:
         except Exception as e:
             # Don't fail the main operation if MongoDB save fails
             logger.error(f"Failed to save to MongoDB: {e}")
+
+    async def _get_invalid_routes(self, origin: str, destinations: list[str]) -> set[str]:
+        """
+        Get list of known invalid routes from MongoDB.
+
+        Invalid routes are routes that previously returned no flights.
+        Routes older than INVALID_ROUTE_TTL_DAYS are considered stale and will be rechecked.
+
+        Returns:
+            Set of destination IATA codes that are known to be invalid
+        """
+        if not self._mongo:
+            return set()
+
+        try:
+            db = self._mongo.client[self._mongo._settings.mongodb_db]
+            collection = db["invalid_flight_routes"]
+
+            # Calculate cutoff date for stale entries
+            cutoff_date = datetime.utcnow() - timedelta(days=self.INVALID_ROUTE_TTL_DAYS)
+
+            # Build route keys to check
+            route_keys = [f"{origin}_{dest}" for dest in destinations]
+
+            # Find invalid routes that are not stale
+            cursor = collection.find({
+                "route_key": {"$in": route_keys},
+                "last_checked_at": {"$gt": cutoff_date}
+            })
+
+            invalid_destinations = set()
+            async for doc in cursor:
+                invalid_destinations.add(doc["destination"])
+
+            if invalid_destinations:
+                logger.info(f"Found {len(invalid_destinations)} known invalid routes from {origin}")
+
+            return invalid_destinations
+
+        except Exception as e:
+            logger.error(f"Error checking invalid routes: {e}")
+            return set()
+
+    async def _save_invalid_route(self, origin: str, destination: str) -> None:
+        """
+        Save an invalid route to MongoDB.
+
+        Called when an API request returns no flights for a route.
+        """
+        if not self._mongo:
+            return
+
+        try:
+            db = self._mongo.client[self._mongo._settings.mongodb_db]
+            collection = db["invalid_flight_routes"]
+
+            now = datetime.utcnow()
+            route_key = f"{origin}_{destination}"
+
+            await collection.update_one(
+                {"route_key": route_key},
+                {
+                    "$set": {
+                        "route_key": route_key,
+                        "origin": origin,
+                        "destination": destination,
+                        "last_checked_at": now
+                    },
+                    "$setOnInsert": {
+                        "first_detected_at": now
+                    },
+                    "$inc": {
+                        "failure_count": 1
+                    }
+                },
+                upsert=True
+            )
+
+            logger.debug(f"Saved invalid route: {origin} -> {destination}")
+
+        except Exception as e:
+            logger.error(f"Error saving invalid route: {e}")
