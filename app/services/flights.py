@@ -605,12 +605,14 @@ class FlightsService:
         start_date: date,
         end_date: date,
         adults: int,
-        currency: str
+        currency: str,
+        max_retries: int = 2
     ) -> Optional[dict]:
         """
         Fetch cheapest price for a single origin-destination pair over date range.
 
         Uses getCalendarPicker API to get prices for all dates, returns minimum with date.
+        Includes retry logic for timeout errors.
 
         Returns:
             {"price": float, "date": str} or None if no flights available
@@ -627,72 +629,86 @@ class FlightsService:
             "country_code": "US",
         }
 
-        try:
-            logger.info(f"Calling getCalendarPicker: {origin} -> {destination}")
+        # Retry loop for API call
+        data = None
+        for attempt in range(max_retries + 1):
+            try:
+                if attempt > 0:
+                    # Wait before retry (exponential backoff: 2s, 4s)
+                    wait_time = 2 ** attempt
+                    logger.info(f"Retry {attempt}/{max_retries} for {origin} -> {destination} (waiting {wait_time}s)")
+                    await asyncio.sleep(wait_time)
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{self.BASE_URL}/getCalendarPicker",
-                    headers=self._headers,
-                    params=params
-                )
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.get(
+                        f"{self.BASE_URL}/getCalendarPicker",
+                        headers=self._headers,
+                        params=params
+                    )
 
-                logger.info(f"Response status: {response.status_code} for {origin} -> {destination}")
+                    if response.status_code != 200:
+                        logger.error(f"HTTP {response.status_code} for {origin} -> {destination}: {response.text[:300]}")
+                        return None
 
-                if response.status_code != 200:
-                    logger.error(f"HTTP {response.status_code}: {response.text[:500]}")
+                    data = response.json()
+                    break  # Success, exit retry loop
+
+            except httpx.TimeoutException:
+                logger.warning(f"Timeout {origin} -> {destination} (attempt {attempt + 1}/{max_retries + 1})")
+                if attempt == max_retries:
+                    logger.error(f"All retries exhausted for {origin} -> {destination}: timeout")
                     return None
+                # Continue to next retry attempt
 
-                data = response.json()
-
-            # Check API response status
-            if not data.get("status"):
-                logger.warning(f"API error for {origin} -> {destination}: {data.get('message')}")
+            except Exception as e:
+                logger.error(f"Error fetching price {origin} -> {destination}: {e}")
                 return None
 
-            # Extract prices and find minimum with its date
-            api_data = data.get("data", [])
-            logger.info(f"Got {len(api_data)} price entries for {origin} -> {destination}")
-
-            if not api_data:
-                return None
-
-            # Filter valid entries and find the cheapest
-            valid_entries = [
-                item for item in api_data
-                if item.get("price") is not None and item.get("departure")
-            ]
-
-            if not valid_entries:
-                logger.warning(f"No valid price entries for {origin} -> {destination}")
-                return None
-
-            # Find the entry with minimum price
-            cheapest = min(valid_entries, key=lambda x: x["price"])
-
-            result = {
-                "price": cheapest["price"],
-                "date": cheapest["departure"]  # Format: "YYYY-MM-DD"
-            }
-
-            # Save to MongoDB for historical data
-            await self._save_flight_prices_to_mongo(
-                origin=origin,
-                destination=destination,
-                adults=adults,
-                currency=currency,
-                cheapest_price=result,
-                all_prices=valid_entries
-            )
-
-            return result
-
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error {origin} -> {destination}: {e.response.status_code} - {e.response.text[:200]}")
+        # If we exited the loop without data, return None
+        if data is None:
             return None
-        except Exception as e:
-            logger.error(f"Error fetching price {origin} -> {destination}: {e}", exc_info=True)
+
+        # Check API response status
+        if not data.get("status"):
+            logger.warning(f"API error for {origin} -> {destination}: {data.get('message')}")
             return None
+
+        # Extract prices and find minimum with its date
+        api_data = data.get("data", [])
+        logger.debug(f"Got {len(api_data)} price entries for {origin} -> {destination}")
+
+        if not api_data:
+            return None
+
+        # Filter valid entries and find the cheapest
+        valid_entries = [
+            item for item in api_data
+            if item.get("price") is not None and item.get("departure")
+        ]
+
+        if not valid_entries:
+            logger.warning(f"No valid price entries for {origin} -> {destination}")
+            return None
+
+        # Find the entry with minimum price
+        cheapest = min(valid_entries, key=lambda x: x["price"])
+
+        result = {
+            "price": cheapest["price"],
+            "date": cheapest["departure"]  # Format: "YYYY-MM-DD"
+        }
+
+        # Save to MongoDB for historical data
+        await self._save_flight_prices_to_mongo(
+            origin=origin,
+            destination=destination,
+            adults=adults,
+            currency=currency,
+            cheapest_price=result,
+            all_prices=valid_entries
+        )
+
+        return result
 
     async def _save_flight_prices_to_mongo(
         self,
