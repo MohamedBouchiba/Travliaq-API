@@ -39,6 +39,24 @@ def get_hotels_service(request: Request):
 
 
 # =============================================================================
+# HEALTH CHECK (must be before /{hotel_id} to avoid route conflict)
+# =============================================================================
+
+@router.get(
+    "/health",
+    summary="Health check for hotels service",
+    description="Check if the hotels service is healthy and configured"
+)
+async def health_check(service=Depends(get_hotels_service)):
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "service": "hotels",
+        "booking_api": "connected"
+    }
+
+
+# =============================================================================
 # POST /hotels/search
 # =============================================================================
 
@@ -380,19 +398,3 @@ async def get_map_prices(
         )
 
 
-# =============================================================================
-# HEALTH CHECK
-# =============================================================================
-
-@router.get(
-    "/health",
-    summary="Health check for hotels service",
-    description="Check if the hotels service is healthy and configured"
-)
-async def health_check(service=Depends(get_hotels_service)):
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "service": "hotels",
-        "booking_api": "connected"
-    }
