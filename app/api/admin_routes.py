@@ -84,6 +84,37 @@ async def clear_map_prices_cache(request: Request) -> dict:
     }
 
 
+@router.post("/cache/clear-hotels")
+async def clear_hotels_cache(request: Request) -> dict:
+    """
+    Clear all hotel-related cache entries from Redis.
+
+    This endpoint removes all cached hotel search results, details, and map prices.
+    Use this to force refresh all hotel data.
+
+    Returns:
+        Number of keys deleted per category
+    """
+    redis_cache = request.app.state.redis_cache
+
+    # Clear all hotel-related caches
+    hotel_search = redis_cache.clear_pattern("hotel_search:*")
+    hotel_details = redis_cache.clear_pattern("hotel_details:*")
+    hotel_map = redis_cache.clear_pattern("hotel_map_price:*")
+
+    total = hotel_search + hotel_details + hotel_map
+
+    return {
+        "message": "Hotel cache cleared successfully",
+        "keys_deleted": {
+            "hotel_search": hotel_search,
+            "hotel_details": hotel_details,
+            "hotel_map_price": hotel_map,
+            "total": total
+        }
+    }
+
+
 @router.get("/health")
 async def health_check() -> dict:
     """
