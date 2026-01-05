@@ -47,6 +47,7 @@ from app.repositories.destinations_repository import DestinationsRepository
 from app.repositories.tags_repository import TagsRepository
 from app.repositories.attractions_repository import AttractionsRepository
 from app.repositories.geocoding_cache_repository import GeocodingCacheRepository
+from app.repositories.hotels_repository import HotelsRepository
 from app.services.booking.client import BookingClient
 from app.services.booking.hotels_service import HotelsService
 
@@ -225,13 +226,24 @@ async def startup_event() -> None:
             http_client=app.state.http_client
         )
 
+        # Initialize hotels repository for MongoDB caching
+        mongo_db = app.state.mongo_manager.client[settings.mongodb_db]
+        app.state.hotels_repo = HotelsRepository(
+            db=mongo_db,
+            destinations_collection_name=settings.mongodb_collection_booking_destinations,
+            hotels_collection_name=settings.mongodb_collection_hotels_static
+        )
+        await app.state.hotels_repo.create_indexes()
+
         app.state.hotels_service = HotelsService(
             client=app.state.booking_client,
-            redis_cache=app.state.redis_cache
+            redis_cache=app.state.redis_cache,
+            hotels_repository=app.state.hotels_repo
         )
-        logger.info("Hotels service initialized with Booking.com API")
+        logger.info("Hotels service initialized with Booking.com API and MongoDB caching")
     else:
         app.state.booking_client = None
+        app.state.hotels_repo = None
         app.state.hotels_service = None
         logger.info("Hotels service not configured (RAPIDAPI_KEY not set)")
 

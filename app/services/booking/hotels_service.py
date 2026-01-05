@@ -16,6 +16,7 @@ from app.models.hotels import (
     HotelSortBy, PropertyType, HotelAmenity
 )
 from app.core.config import get_settings
+from app.repositories.hotels_repository import HotelsRepository
 from .client import BookingClient, BookingAPIError
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,8 @@ class HotelsService:
     def __init__(
         self,
         client: BookingClient,
-        redis_cache: Optional[Any] = None
+        redis_cache: Optional[Any] = None,
+        hotels_repository: Optional[HotelsRepository] = None
     ):
         """
         Initialize Hotels service.
@@ -70,12 +72,14 @@ class HotelsService:
         Args:
             client: BookingClient instance
             redis_cache: Optional Redis cache instance
+            hotels_repository: Optional MongoDB repository for persistent caching
         """
         self.client = client
         self.cache = redis_cache
+        self.repo = hotels_repository
         self._destination_cache: Dict[str, Tuple[str, str]] = {}  # city -> (dest_id, dest_type)
 
-        logger.info("HotelsService initialized")
+        logger.info("HotelsService initialized" + (" with MongoDB" if hotels_repository else ""))
 
     # =========================================================================
     # CACHE HELPERS
@@ -112,12 +116,20 @@ class HotelsService:
     # DESTINATION RESOLUTION
     # =========================================================================
 
-    async def _resolve_destination(self, city: str, locale: str = "en-gb") -> Tuple[str, str]:
+    async def _resolve_destination(
+        self,
+        city: str,
+        country_code: str = "",
+        locale: str = "en-gb"
+    ) -> Tuple[str, str]:
         """
         Resolve city name to Booking.com destination ID.
 
+        Uses 3-tier caching: memory -> MongoDB -> API
+
         Args:
             city: City name
+            country_code: ISO country code (for MongoDB lookup)
             locale: Language locale
 
         Returns:
@@ -126,13 +138,22 @@ class HotelsService:
         Raises:
             BookingAPIError: If destination not found
         """
-        cache_key = f"{city.lower()}_{locale}"
+        cache_key = f"{city.lower()}_{country_code.upper() if country_code else locale}"
 
-        # Check memory cache first
+        # 1. Check memory cache first (fastest)
         if cache_key in self._destination_cache:
             return self._destination_cache[cache_key]
 
-        # Query API
+        # 2. Check MongoDB (persistent)
+        if self.repo and country_code:
+            mongo_result = await self.repo.get_destination(city, country_code)
+            if mongo_result:
+                dest_id, dest_type = mongo_result
+                self._destination_cache[cache_key] = (dest_id, dest_type)
+                logger.info(f"Destination from MongoDB: {city} -> {dest_id}")
+                return dest_id, dest_type
+
+        # 3. Query API (expensive)
         results = await self.client.search_destination(city, locale)
 
         if not results:
@@ -154,10 +175,17 @@ class HotelsService:
         dest_id = str(best_match.get("dest_id", ""))
         dest_type = best_match.get("dest_type", "city")
 
-        # Cache result
+        # Cache in memory
         self._destination_cache[cache_key] = (dest_id, dest_type)
 
-        logger.info(f"Resolved destination: {city} -> {dest_id} ({dest_type})")
+        # Save to MongoDB (permanent)
+        if self.repo and country_code:
+            try:
+                await self.repo.save_destination(city, country_code, dest_id, dest_type)
+            except Exception as e:
+                logger.warning(f"Failed to save destination to MongoDB: {e}")
+
+        logger.info(f"Resolved destination via API: {city} -> {dest_id} ({dest_type})")
         return dest_id, dest_type
 
     # =========================================================================
@@ -429,7 +457,11 @@ class HotelsService:
 
         # Resolve destination
         locale = f"{request.locale}-gb" if len(request.locale) == 2 else request.locale
-        dest_id, dest_type = await self._resolve_destination(request.city, locale)
+        dest_id, dest_type = await self._resolve_destination(
+            request.city,
+            country_code=request.countryCode,
+            locale=locale
+        )
 
         # Calculate totals
         total_adults = sum(r.adults for r in request.rooms)
@@ -516,7 +548,7 @@ class HotelsService:
         if request.filters:
             filters_applied["filters"] = request.filters.model_dump(exclude_none=True)
 
-        # Cache results
+        # Cache results in Redis
         settings = get_settings()
         cache_data = {
             "results": results.model_dump(),
@@ -524,6 +556,23 @@ class HotelsService:
             "cached_at": datetime.utcnow().isoformat()
         }
         await self._set_cached("hotel_search", cache_params, cache_data, ttl_seconds=settings.cache_ttl_hotel_search)
+
+        # Save hotels to MongoDB (static data + price history)
+        if self.repo and hotels:
+            try:
+                hotels_data = [h.model_dump() for h in hotels]
+                await self.repo.save_hotels_batch(hotels_data, request.city, request.countryCode)
+
+                # Also save price history for each hotel
+                for hotel in hotels:
+                    if hotel.pricePerNight and hotel.pricePerNight > 0:
+                        await self.repo.save_price_history(
+                            hotel.id,
+                            hotel.pricePerNight,
+                            hotel.currency
+                        )
+            except Exception as e:
+                logger.warning(f"Failed to save hotels to MongoDB: {e}")
 
         return HotelSearchResponse(
             results=results,
@@ -675,7 +724,7 @@ class HotelsService:
         prices: Dict[str, Optional[CityPriceResult]] = {}
         cities_to_fetch = []
 
-        # Check cache for each city
+        # Check cache for each city (Redis -> MongoDB -> API)
         for city in cities:
             city_key = f"{city.city}_{city.countryCode}"
             cache_params = {
@@ -687,10 +736,26 @@ class HotelsService:
             }
 
             if not force_refresh:
+                # 1. Check Redis cache first
                 cached = await self._get_cached("hotel_map_price", cache_params)
                 if cached:
                     prices[city_key] = CityPriceResult(**cached["price"]) if cached.get("price") else None
                     continue
+
+                # 2. Check MongoDB for indicative price (no API call needed!)
+                if self.repo:
+                    mongo_price = await self.repo.get_city_indicative_price(
+                        city.city,
+                        city.countryCode
+                    )
+                    if mongo_price:
+                        min_price, currency = mongo_price
+                        prices[city_key] = CityPriceResult(
+                            minPrice=round(min_price, 2),
+                            currency=currency
+                        )
+                        logger.info(f"Map price from MongoDB: {city.city} -> {min_price} {currency}")
+                        continue
 
             cities_to_fetch.append((city, city_key, cache_params))
 
@@ -702,8 +767,11 @@ class HotelsService:
                 city, city_key, cache_params = city_data
                 async with semaphore:
                     try:
-                        # Resolve destination
-                        dest_id, dest_type = await self._resolve_destination(city.city)
+                        # Resolve destination (with country_code for MongoDB caching)
+                        dest_id, dest_type = await self._resolve_destination(
+                            city.city,
+                            country_code=city.countryCode
+                        )
 
                         # Search with minimal results
                         response = await self.client.search_hotels(
