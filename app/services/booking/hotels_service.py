@@ -412,6 +412,70 @@ class HotelsService:
         )
 
     # =========================================================================
+    # FILTERING AND SORTING HELPERS
+    # =========================================================================
+
+    def _apply_filters_and_sort(
+        self,
+        hotels: List[HotelResult],
+        request: HotelSearchRequest
+    ) -> List[HotelResult]:
+        """Apply filters and sorting to hotel list in-memory."""
+        filtered = hotels
+
+        if request.filters:
+            # Price filter
+            if request.filters.priceMin is not None:
+                filtered = [h for h in filtered if h.pricePerNight >= request.filters.priceMin]
+            if request.filters.priceMax is not None:
+                filtered = [h for h in filtered if h.pricePerNight <= request.filters.priceMax]
+
+            # Rating filter
+            if request.filters.minRating is not None:
+                filtered = [h for h in filtered if h.rating and h.rating >= request.filters.minRating]
+
+            # Stars filter
+            if request.filters.minStars is not None:
+                filtered = [h for h in filtered if h.stars and h.stars >= request.filters.minStars]
+
+            # Amenities filter
+            if request.filters.amenities:
+                required = set(a.value for a in request.filters.amenities)
+                filtered = [h for h in filtered if required.issubset(set(h.amenities))]
+
+            # Property types filter
+            if request.filters.types:
+                # Note: We don't have property type in HotelResult, skip for now
+                pass
+
+        # Apply sorting
+        if request.sort == HotelSortBy.PRICE_ASC:
+            filtered.sort(key=lambda h: h.pricePerNight or float('inf'))
+        elif request.sort == HotelSortBy.PRICE_DESC:
+            filtered.sort(key=lambda h: h.pricePerNight or 0, reverse=True)
+        elif request.sort == HotelSortBy.RATING:
+            filtered.sort(key=lambda h: h.rating or 0, reverse=True)
+        elif request.sort == HotelSortBy.DISTANCE:
+            filtered.sort(key=lambda h: h.distanceFromCenter or float('inf'))
+        # POPULARITY is default order from API
+
+        return filtered
+
+    def _build_filters_applied(self, request: HotelSearchRequest) -> dict:
+        """Build filters_applied dict for response."""
+        total_adults = sum(r.adults for r in request.rooms)
+        filters_applied = {
+            "city": request.city,
+            "dates": f"{request.checkIn} - {request.checkOut}",
+            "rooms": len(request.rooms),
+            "adults": total_adults,
+            "sort": request.sort.value
+        }
+        if request.filters:
+            filters_applied["filters"] = request.filters.model_dump(exclude_none=True)
+        return filters_applied
+
+    # =========================================================================
     # PUBLIC API: SEARCH HOTELS
     # =========================================================================
 
@@ -423,6 +487,9 @@ class HotelsService:
         """
         Search for hotels.
 
+        Strategy: Cache maximum results WITHOUT filters, then apply filters in-memory.
+        This way, different filter combinations share the same cache entry.
+
         Args:
             request: Search request parameters
             force_refresh: Force bypass cache
@@ -430,7 +497,7 @@ class HotelsService:
         Returns:
             HotelSearchResponse with results
         """
-        # Build cache key params
+        # Build cache key WITHOUT filters/sort/pagination (shared cache for same city+dates)
         cache_params = {
             "city": request.city,
             "country": request.countryCode,
@@ -438,20 +505,29 @@ class HotelsService:
             "checkout": str(request.checkOut),
             "adults": sum(r.adults for r in request.rooms),
             "rooms": len(request.rooms),
-            "filters": request.filters.model_dump() if request.filters else None,
-            "sort": request.sort.value,
-            "limit": request.limit,
-            "offset": request.offset
+            "currency": request.currency
+            # NO filters, sort, limit, offset - these are applied in-memory
         }
 
-        # Check cache
+        # Check cache (contains ALL hotels without filters)
         if not force_refresh:
             cached = await self._get_cached("hotel_search", cache_params)
             if cached:
                 logger.info(f"Hotel search cache hit for {request.city}")
+                # Apply filters/sort/pagination in-memory on cached data
+                all_hotels = [HotelResult(**h) for h in cached.get("all_hotels", [])]
+                filtered_hotels = self._apply_filters_and_sort(all_hotels, request)
+
+                total_filtered = len(filtered_hotels)
+                paginated = filtered_hotels[request.offset:request.offset + request.limit]
+
                 return HotelSearchResponse(
-                    results=HotelSearchResults(**cached["results"]),
-                    filters_applied=cached.get("filters_applied", {}),
+                    results=HotelSearchResults(
+                        hotels=paginated,
+                        total=total_filtered,
+                        hasMore=request.offset + len(paginated) < total_filtered
+                    ),
+                    filters_applied=self._build_filters_applied(request),
                     cache_info={"cached": True, "cached_at": cached.get("cached_at")}
                 )
 
@@ -472,16 +548,10 @@ class HotelsService:
 
         num_nights = (request.checkOut - request.checkIn).days
 
-        # Build property type filter
-        categories_filter = None
-        if request.filters and request.filters.types:
-            codes = [PROPERTY_TYPE_CODES.get(t) for t in request.filters.types if t in PROPERTY_TYPE_CODES]
-            categories_filter = ",".join(filter(None, codes))
+        # Fetch MAXIMUM results WITHOUT filters (filters applied in-memory)
+        # This allows same cache to serve multiple filter combinations
+        MAX_CACHE_HOTELS = 100
 
-        # Map sort
-        order_by = SORT_MAPPING.get(request.sort, "popularity")
-
-        # Call API
         raw_response = await self.client.search_hotels(
             dest_id=dest_id,
             dest_type=dest_type,
@@ -493,78 +563,50 @@ class HotelsService:
             children_ages=children_ages,
             filter_by_currency=request.currency,
             locale=locale,
-            order_by=order_by,
-            page_number=request.offset // request.limit if request.limit else 0,
-            price_min=request.filters.priceMin if request.filters else None,
-            price_max=request.filters.priceMax if request.filters else None,
-            categories_filter_ids=categories_filter
+            order_by="popularity",  # Always fetch by popularity, sort in-memory
+            page_number=1  # First page with max results
+            # NO price filters - applied in-memory
         )
 
-        # Map results
+        # Map ALL results without filtering
         raw_hotels = raw_response.get("hotels", raw_response.get("result", []))
         if not isinstance(raw_hotels, list):
             raw_hotels = []
 
-        hotels = []
-        for raw in raw_hotels:
+        all_hotels = []
+        for raw in raw_hotels[:MAX_CACHE_HOTELS]:
             hotel = self._map_hotel_result(raw, request.currency, num_nights)
             if hotel:
-                # Apply post-filters (rating, amenities)
-                if request.filters:
-                    if request.filters.minRating and hotel.rating:
-                        if hotel.rating < request.filters.minRating:
-                            continue
-                    if request.filters.minStars and hotel.stars:
-                        if hotel.stars < request.filters.minStars:
-                            continue
-                    if request.filters.amenities:
-                        required = set(a.value for a in request.filters.amenities)
-                        if not required.issubset(set(hotel.amenities)):
-                            continue
+                all_hotels.append(hotel)
 
-                hotels.append(hotel)
-
-        # Apply limit
-        total = raw_response.get("count", raw_response.get("total_count", len(hotels)))
-        hotels = hotels[:request.limit]
-
-        # Reverse if price_desc
-        if request.sort == HotelSortBy.PRICE_DESC:
-            hotels.reverse()
-
-        results = HotelSearchResults(
-            hotels=hotels,
-            total=total,
-            hasMore=len(hotels) >= request.limit
-        )
-
-        filters_applied = {
-            "city": request.city,
-            "dates": f"{request.checkIn} - {request.checkOut}",
-            "rooms": len(request.rooms),
-            "adults": total_adults,
-            "sort": request.sort.value
-        }
-        if request.filters:
-            filters_applied["filters"] = request.filters.model_dump(exclude_none=True)
-
-        # Cache results in Redis
+        # Cache ALL hotels (without filters)
         settings = get_settings()
         cache_data = {
-            "results": results.model_dump(),
-            "filters_applied": filters_applied,
+            "all_hotels": [h.model_dump() for h in all_hotels],
+            "total_from_api": raw_response.get("count", raw_response.get("total_count", len(all_hotels))),
             "cached_at": datetime.utcnow().isoformat()
         }
         await self._set_cached("hotel_search", cache_params, cache_data, ttl_seconds=settings.cache_ttl_hotel_search)
 
-        # Save hotels to MongoDB (static data + price history)
-        if self.repo and hotels:
+        # Apply filters/sort/pagination in-memory
+        filtered_hotels = self._apply_filters_and_sort(all_hotels, request)
+        total_filtered = len(filtered_hotels)
+        paginated = filtered_hotels[request.offset:request.offset + request.limit]
+
+        results = HotelSearchResults(
+            hotels=paginated,
+            total=total_filtered,
+            hasMore=request.offset + len(paginated) < total_filtered
+        )
+
+        # Save ALL hotels to MongoDB (static data + price history)
+        if self.repo and all_hotels:
             try:
-                hotels_data = [h.model_dump() for h in hotels]
+                hotels_data = [h.model_dump() for h in all_hotels]
                 await self.repo.save_hotels_batch(hotels_data, request.city, request.countryCode)
 
                 # Also save price history for each hotel
-                for hotel in hotels:
+                for hotel in all_hotels:
                     if hotel.pricePerNight and hotel.pricePerNight > 0:
                         await self.repo.save_price_history(
                             hotel.id,
@@ -576,7 +618,7 @@ class HotelsService:
 
         return HotelSearchResponse(
             results=results,
-            filters_applied=filters_applied,
+            filters_applied=self._build_filters_applied(request),
             cache_info={"cached": False}
         )
 
