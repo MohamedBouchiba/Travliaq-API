@@ -61,7 +61,7 @@ async def cleanup_cache_task():
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    app.state.http_client = httpx.AsyncClient()
+    app.state.http_client = httpx.AsyncClient(timeout=60.0)
 
     # Start background cache cleanup task
     asyncio.create_task(cleanup_cache_task())
