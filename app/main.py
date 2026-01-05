@@ -1,8 +1,14 @@
 from __future__ import annotations
 import asyncio
 import logging
+import os
 from fastapi import FastAPI
 
+# Configure logging level from environment or default to INFO
+logging.basicConfig(
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper()),
+    format="%(levelname)s: %(name)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
