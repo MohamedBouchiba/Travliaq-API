@@ -548,30 +548,49 @@ class HotelsService:
 
         num_nights = (request.checkOut - request.checkIn).days
 
-        # Fetch MAXIMUM results WITHOUT filters (filters applied in-memory)
+        # Fetch MAXIMUM results WITHOUT filters by fetching multiple pages in parallel
         # This allows same cache to serve multiple filter combinations
-        MAX_CACHE_HOTELS = 100
+        MAX_PAGES = 3  # Fetch 3 pages in parallel (~20-25 hotels/page = ~60-75 total)
+        MAX_CACHE_HOTELS = 200
 
-        raw_response = await self.client.search_hotels(
-            dest_id=dest_id,
-            dest_type=dest_type,
-            checkin_date=str(request.checkIn),
-            checkout_date=str(request.checkOut),
-            adults_number=total_adults,
-            room_number=len(request.rooms),
-            children_number=total_children,
-            children_ages=children_ages,
-            filter_by_currency=request.currency,
-            locale=locale,
-            order_by="popularity",  # Always fetch by popularity, sort in-memory
-            page_number=1  # First page with max results
-            # NO price filters - applied in-memory
-        )
+        async def fetch_page(page: int) -> list:
+            """Fetch a single page of hotel results."""
+            try:
+                response = await self.client.search_hotels(
+                    dest_id=dest_id,
+                    dest_type=dest_type,
+                    checkin_date=str(request.checkIn),
+                    checkout_date=str(request.checkOut),
+                    adults_number=total_adults,
+                    room_number=len(request.rooms),
+                    children_number=total_children,
+                    children_ages=children_ages,
+                    filter_by_currency=request.currency,
+                    locale=locale,
+                    order_by="popularity",  # Always fetch by popularity, sort in-memory
+                    page_number=page
+                    # NO price filters - applied in-memory
+                )
+                hotels = response.get("hotels", response.get("result", []))
+                return hotels if isinstance(hotels, list) else []
+            except Exception as e:
+                logger.warning(f"Failed to fetch page {page}: {e}")
+                return []
 
-        # Map ALL results without filtering
-        raw_hotels = raw_response.get("hotels", raw_response.get("result", []))
-        if not isinstance(raw_hotels, list):
-            raw_hotels = []
+        # Fetch multiple pages in parallel for maximum data
+        page_results = await asyncio.gather(*[fetch_page(p) for p in range(1, MAX_PAGES + 1)])
+
+        # Combine all pages and deduplicate by hotel_id
+        seen_ids = set()
+        raw_hotels = []
+        for page_hotels in page_results:
+            for hotel in page_hotels:
+                hotel_id = hotel.get("hotel_id") or hotel.get("property", {}).get("id")
+                if hotel_id and hotel_id not in seen_ids:
+                    seen_ids.add(hotel_id)
+                    raw_hotels.append(hotel)
+
+        logger.info(f"Fetched {len(raw_hotels)} unique hotels from {MAX_PAGES} pages for {request.city}")
 
         all_hotels = []
         for raw in raw_hotels[:MAX_CACHE_HOTELS]:
@@ -583,7 +602,7 @@ class HotelsService:
         settings = get_settings()
         cache_data = {
             "all_hotels": [h.model_dump() for h in all_hotels],
-            "total_from_api": raw_response.get("count", raw_response.get("total_count", len(all_hotels))),
+            "total_from_api": len(all_hotels),  # Total unique hotels fetched from all pages
             "cached_at": datetime.utcnow().isoformat()
         }
         await self._set_cached("hotel_search", cache_params, cache_data, ttl_seconds=settings.cache_ttl_hotel_search)
