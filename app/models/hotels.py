@@ -133,7 +133,7 @@ class HotelResult(BaseModel):
     totalPrice: Optional[float] = None
     currency: str
     address: str
-    distanceFromCenter: Optional[str] = None
+    distanceFromCenter: Optional[float] = None  # Distance in km
     amenities: List[str] = Field(default_factory=list)
     bookingUrl: Optional[str] = None
 
@@ -191,7 +191,7 @@ class HotelDetails(BaseModel):
     rating: Optional[float] = None
     reviewCount: int = 0
     address: str
-    distanceFromCenter: Optional[str] = None
+    distanceFromCenter: Optional[float] = None  # Distance in km
     description: Optional[str] = None
     images: List[str] = Field(default_factory=list)
     amenities: List[AmenityDetail] = Field(default_factory=list)
