@@ -630,7 +630,8 @@ class ActivitiesService:
                 # All attractions with precise Viator coordinates will be displayed on map
                 return attractions_all, viator_response.get("totalCount", 0)
             except Exception as e:
-                logger.error(f"[UNIFIED_V2] Error fetching attractions: {e}")
+                error_type = type(e).__name__
+                logger.error(f"[UNIFIED_V2] Error fetching attractions ({error_type}): {e}")
                 return [], 0
 
         # Execute both in parallel
@@ -927,7 +928,7 @@ class ActivitiesService:
             # Check if radius_km is valid
             if radius_km is None or search_coords is None:
                 logger.warning("[GEO] Skipping geo filtering: radius_km or search_coords is None")
-                return activities, total_count
+                return activities, original_total
 
             logger.info(
                 f"[GEO] Filtering {len(activities)} activities within {radius_km}km "
