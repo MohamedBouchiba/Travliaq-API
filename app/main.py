@@ -1,6 +1,9 @@
 from __future__ import annotations
 import asyncio
+import logging
 from fastapi import FastAPI
+
+logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 
@@ -61,7 +64,8 @@ async def cleanup_cache_task():
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    app.state.http_client = httpx.AsyncClient(timeout=60.0)
+    app.state.http_client = httpx.AsyncClient(timeout=90.0)
+    logger.info(f"HTTP client initialized with timeout=90s")
 
     # Start background cache cleanup task
     asyncio.create_task(cleanup_cache_task())

@@ -129,7 +129,7 @@ class ViatorClient:
         except httpx.RequestError as e:
             error_type = type(e).__name__
             error_cause = str(e.__cause__) if e.__cause__ else str(e) or "No details"
-            logger.error(f"Request error to Viator API ({error_type}): {error_cause}")
+            logger.error(f"Request error to Viator API ({error_type}) on {endpoint}: {error_cause}")
             raise
 
     async def get(self, endpoint: str, params: Optional[dict] = None, language: str = "en") -> dict:
