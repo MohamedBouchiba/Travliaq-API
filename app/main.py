@@ -47,6 +47,8 @@ from app.repositories.destinations_repository import DestinationsRepository
 from app.repositories.tags_repository import TagsRepository
 from app.repositories.attractions_repository import AttractionsRepository
 from app.repositories.geocoding_cache_repository import GeocodingCacheRepository
+from app.services.booking.client import BookingClient
+from app.services.booking.hotels_service import HotelsService
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
@@ -216,6 +218,23 @@ async def startup_event() -> None:
         app.state.location_resolver = None
         app.state.activities_service = None
 
+    # Initialize Booking.com Hotels API services (only if API key is configured)
+    if settings.booking_enabled:
+        app.state.booking_client = BookingClient(
+            api_key=settings.rapidapi_key,
+            http_client=app.state.http_client
+        )
+
+        app.state.hotels_service = HotelsService(
+            client=app.state.booking_client,
+            redis_cache=app.state.redis_cache
+        )
+        logger.info("Hotels service initialized with Booking.com API")
+    else:
+        app.state.booking_client = None
+        app.state.hotels_service = None
+        logger.info("Hotels service not configured (RAPIDAPI_KEY not set)")
+
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
@@ -230,6 +249,10 @@ async def shutdown_event() -> None:
     # Close Viator client if it was initialized
     if app.state.viator_client:
         await app.state.viator_client.close()
+
+    # Close Booking client if it was initialized
+    if app.state.booking_client:
+        await app.state.booking_client.close()
 
 
 app.include_router(router)

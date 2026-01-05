@@ -53,6 +53,14 @@ class Settings(BaseSettings):
         """Check if Viator integration is enabled."""
         return bool(self.viator_api_key)
 
+    # RapidAPI (for Booking.com hotels)
+    rapidapi_key: str = Field("", alias="RAPIDAPI_KEY")
+
+    @property
+    def booking_enabled(self) -> bool:
+        """Check if Booking.com integration is enabled."""
+        return bool(self.rapidapi_key)
+
     # Upstash Redis (for flights cache)
     upstash_redis_rest_url: str = Field(..., alias="UPSTASH_REDIS_REST_URL")
     upstash_redis_rest_token: str = Field(..., alias="UPSTASH_REDIS_REST_TOKEN")
@@ -70,6 +78,11 @@ class Settings(BaseSettings):
     cache_ttl_destinations: int = Field(2592000, description="30 days")
     cache_ttl_categories: int = Field(2592000, description="30 days")
     cache_ttl_locations: int = Field(2592000, description="30 days - Viator location coordinates")
+
+    # Hotels cache TTLs (optimized for cost reduction)
+    cache_ttl_hotel_search: int = Field(7200, description="2 hours - Hotel search results")
+    cache_ttl_hotel_details: int = Field(604800, description="7 days - Hotel details (static data)")
+    cache_ttl_hotel_map_prices: int = Field(86400, description="24 hours - Map prices (indicative only)")
 
     # Feature Flags
     enable_geocoding: bool = Field(False, description="Enable LEVEL 3 geocoding enrichment (Geoapify + Google Places)", alias="ENABLE_GEOCODING")
