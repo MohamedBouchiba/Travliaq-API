@@ -65,7 +65,7 @@ class ViatorAttractionsService:
             request_body["sorting"] = {"sort": sort}
 
         response = await self.client.post(
-            "/partner/attractions/search",
+            "/attractions/search",
             json_data=request_body,
             language=language
         )
