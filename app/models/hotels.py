@@ -71,8 +71,8 @@ class HotelSearchRequest(BaseModel):
 
     city: str = Field(..., min_length=2, description="City name")
     countryCode: str = Field(..., min_length=2, max_length=2, description="ISO country code")
-    lat: float = Field(..., ge=-90, le=90, description="Latitude")
-    lng: float = Field(..., ge=-180, le=180, description="Longitude")
+    lat: Optional[float] = Field(None, ge=-90, le=90, description="Latitude (optional)")
+    lng: Optional[float] = Field(None, ge=-180, le=180, description="Longitude (optional)")
     checkIn: date = Field(..., description="Check-in date")
     checkOut: date = Field(..., description="Check-out date")
     rooms: List[RoomOccupancy] = Field(default_factory=lambda: [RoomOccupancy()], description="Room configurations")
@@ -102,8 +102,8 @@ class CityPrice(BaseModel):
     """City with coordinates for map prices."""
     city: str
     countryCode: str
-    lat: float
-    lng: float
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 
 class MapPricesRequest(BaseModel):
