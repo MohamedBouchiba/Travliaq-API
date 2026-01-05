@@ -127,7 +127,6 @@ class ViatorMapper:
                 "lat": center["latitude"],
                 "lon": center["longitude"]
             }
-            logger.info(f"Attraction {attraction.get('attractionId')}: Direct coords: {coordinates}")
 
         # Extract address
         address = attraction.get("address", {})

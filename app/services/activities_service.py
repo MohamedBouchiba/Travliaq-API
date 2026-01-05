@@ -599,36 +599,66 @@ class ActivitiesService:
                 return [], 0
 
         async def fetch_attractions():
-            """Fetch ALL attractions for map display (no scoring limit)."""
+            """Fetch attractions for map display, sorted by popularity."""
             try:
-                logger.info(f"[UNIFIED_V2] Fetching ALL attractions (up to {attractions_limit})...")
+                # Viator API max per request is 30, so paginate to get more
+                page_size = 30
+                max_pages = 3  # Fetch up to 90 attractions (3 pages x 30)
+                target_count = min(attractions_limit, page_size * max_pages)
 
-                # Fetch ALL attractions (no filters - we want full coverage for map)
+                logger.info(f"[UNIFIED_V2] Fetching attractions sorted by popularity (up to {target_count})...")
+
+                attractions_all = []
+                total_available = 0
+
+                # Fetch first page with REVIEW_AVG_RATING sort (most popular first)
                 viator_response = await self.viator_attractions.search_attractions(
                     destination_id=destination_id,
-                    sort="DEFAULT",
+                    sort="REVIEW_AVG_RATING",  # Sort by popularity
                     start=1,
-                    count=attractions_limit,
+                    count=page_size,
                     language=request.language
                 )
 
-                attractions_all = [
+                total_available = viator_response.get("totalCount", 0)
+                first_page = viator_response.get("attractions", [])
+                attractions_all.extend(first_page)
+
+                # Fetch additional pages if needed and available
+                pages_fetched = 1
+                while len(attractions_all) < target_count and len(attractions_all) < total_available and pages_fetched < max_pages:
+                    pages_fetched += 1
+                    start_pos = (pages_fetched - 1) * page_size + 1
+
+                    next_response = await self.viator_attractions.search_attractions(
+                        destination_id=destination_id,
+                        sort="REVIEW_AVG_RATING",
+                        start=start_pos,
+                        count=page_size,
+                        language=request.language
+                    )
+
+                    next_page = next_response.get("attractions", [])
+                    if not next_page:
+                        break
+                    attractions_all.extend(next_page)
+
+                # Map all attractions to our format
+                mapped_attractions = [
                     ViatorMapper.map_attraction(attraction)
-                    for attraction in viator_response.get("attractions", [])
+                    for attraction in attractions_all
                 ]
 
                 # Add type field
-                for attraction in attractions_all:
+                for attraction in mapped_attractions:
                     attraction["type"] = "attraction"
 
                 logger.info(
-                    f"[UNIFIED_V2] Fetched {len(attractions_all)} attractions "
-                    f"(total available: {viator_response.get('totalCount', 0)})"
+                    f"[UNIFIED_V2] Fetched {len(mapped_attractions)} attractions "
+                    f"(total available: {total_available}, pages: {pages_fetched})"
                 )
 
-                # NEW: Return ALL attractions (no limit to 15)
-                # All attractions with precise Viator coordinates will be displayed on map
-                return attractions_all, viator_response.get("totalCount", 0)
+                return mapped_attractions, total_available
             except Exception as e:
                 error_type = type(e).__name__
                 logger.error(f"[UNIFIED_V2] Error fetching attractions ({error_type}): {e}")
@@ -684,12 +714,15 @@ class ActivitiesService:
         return list(set(tags)) if tags else None
 
     async def _persist_activities(self, activities: list[dict]):
-        """Persist activities to MongoDB (upsert)."""
-        for activity in activities:
-            try:
-                await self.repo.upsert_activity(activity["id"], activity)
-            except Exception as e:
-                logger.error(f"Error persisting activity {activity['id']}: {e}")
+        """Persist activities to MongoDB (bulk upsert)."""
+        if not activities:
+            return
+
+        try:
+            stats = await self.repo.bulk_upsert_activities(activities)
+            logger.debug(f"Persisted {len(activities)} activities: {stats}")
+        except Exception as e:
+            logger.error(f"Error bulk persisting activities: {e}")
 
     # ========================================================================
     # ENRICHMENT SYSTEM REMOVED - 2026-01-03

@@ -46,9 +46,63 @@ class ActivitiesRepository:
         )
 
         if result.upserted_id:
-            logger.info(f"Inserted new activity: {product_code}")
+            logger.debug(f"Inserted new activity: {product_code}")
         else:
-            logger.info(f"Updated existing activity: {product_code}")
+            logger.debug(f"Updated existing activity: {product_code}")
+
+    async def bulk_upsert_activities(self, activities: list[dict]) -> dict:
+        """
+        Bulk upsert multiple activities in a single operation.
+
+        Args:
+            activities: List of activity dicts with 'id' (product_code) field
+
+        Returns:
+            Dict with 'inserted', 'modified', 'errors' counts
+        """
+        if not activities:
+            return {"inserted": 0, "modified": 0, "errors": 0}
+
+        from pymongo import UpdateOne
+        from datetime import datetime
+
+        now = datetime.utcnow()
+        operations = []
+
+        for activity in activities:
+            product_code = activity.get("id")
+            if not product_code:
+                continue
+
+            # Clean activity data
+            activity_clean = {k: v for k, v in activity.items() if k != "metadata"}
+
+            operations.append(
+                UpdateOne(
+                    {"product_code": product_code},
+                    {
+                        "$set": activity_clean,
+                        "$setOnInsert": {"metadata.first_seen": now},
+                        "$currentDate": {"metadata.last_updated": True},
+                        "$inc": {"metadata.fetch_count": 1}
+                    },
+                    upsert=True
+                )
+            )
+
+        if not operations:
+            return {"inserted": 0, "modified": 0, "errors": 0}
+
+        result = await self.collection.bulk_write(operations, ordered=False)
+
+        stats = {
+            "inserted": result.upserted_count,
+            "modified": result.modified_count,
+            "errors": 0
+        }
+
+        logger.info(f"Bulk upsert: {stats['inserted']} inserted, {stats['modified']} updated")
+        return stats
 
     async def get_activity(self, product_code: str) -> Optional[dict]:
         """Get activity by product code."""
