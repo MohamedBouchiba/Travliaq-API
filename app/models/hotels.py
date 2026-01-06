@@ -156,9 +156,21 @@ class HotelSearchResponse(BaseModel):
 # Hotel Details Models
 
 class AmenityDetail(BaseModel):
-    """Amenity with label."""
+    """Amenity with label, category, and free/paid status."""
     code: str
     label: str
+    category: Optional[str] = None   # "connectivity", "food", "wellness", "room", "services", "general"
+    isFree: Optional[bool] = None    # True = gratuit, False = payant, None = inconnu
+
+
+class CategorizedAmenities(BaseModel):
+    """Amenities grouped by category."""
+    connectivity: List[AmenityDetail] = Field(default_factory=list)  # WiFi, Internet
+    food: List[AmenityDetail] = Field(default_factory=list)          # Breakfast, Restaurant, Bar
+    wellness: List[AmenityDetail] = Field(default_factory=list)      # Pool, Spa, Gym
+    room: List[AmenityDetail] = Field(default_factory=list)          # AC, TV, Kitchen
+    services: List[AmenityDetail] = Field(default_factory=list)      # Parking, Laundry
+    general: List[AmenityDetail] = Field(default_factory=list)       # Autres
 
 
 class RatingBreakdown(BaseModel):
@@ -212,6 +224,7 @@ class HotelDetails(BaseModel):
     description: Optional[str] = None
     images: List[str] = Field(default_factory=list)
     amenities: List[AmenityDetail] = Field(default_factory=list)
+    amenitiesByCategory: Optional[CategorizedAmenities] = None  # Grouped amenities
     highlights: List[str] = Field(default_factory=list)
     badges: List[PropertyBadge] = Field(default_factory=list)
     ratingBreakdown: Optional[RatingBreakdown] = None

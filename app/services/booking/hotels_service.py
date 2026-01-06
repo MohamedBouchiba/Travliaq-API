@@ -14,7 +14,7 @@ from app.models.hotels import (
     HotelDetailsQuery, HotelDetailsResponse, HotelDetails, AmenityDetail,
     HotelPolicies, RoomOption, RatingBreakdown, PropertyBadge,
     MapPricesRequest, MapPricesResponse, CityPriceResult,
-    HotelSortBy, PropertyType, HotelAmenity
+    HotelSortBy, PropertyType, HotelAmenity, CategorizedAmenities
 )
 from app.core.config import get_settings
 from app.repositories.hotels_repository import HotelsRepository
@@ -55,6 +55,64 @@ AMENITY_MAPPING = {
     "bar": ["bar", "bar/lounge"],
     "ac": ["air conditioning", "air-conditioned", "climate control"],
     "kitchen": ["kitchen", "kitchenette", "cooking facilities"]
+}
+
+# Mapping facility_type_name to our category codes
+FACILITY_CATEGORY_MAPPING = {
+    # Connectivity
+    "Internet": "connectivity",
+    "Wi-Fi": "connectivity",
+    "Connectivity": "connectivity",
+    # Food & Drinks
+    "Food & Drink": "food",
+    "Breakfast": "food",
+    "Restaurant": "food",
+    "Bar": "food",
+    "Meals": "food",
+    # Wellness & Fitness
+    "Wellness": "wellness",
+    "Pool and spa": "wellness",
+    "Fitness center": "wellness",
+    "Spa": "wellness",
+    "Swimming pool": "wellness",
+    # Room amenities
+    "Bedroom": "room",
+    "Bathroom": "room",
+    "Media & Technology": "room",
+    "View": "room",
+    "Kitchen": "room",
+    "Room Amenities": "room",
+    "Living Area": "room",
+    "Outdoors": "room",
+    # Services
+    "Parking": "services",
+    "Reception services": "services",
+    "Cleaning services": "services",
+    "Business facilities": "services",
+    "Safety & security": "services",
+    "Transport": "services",
+    "Front desk services": "services",
+    "General": "services",
+    "Languages spoken": "services",
+    "Accessibility": "services",
+}
+
+# Default categories for normalized amenity codes
+AMENITY_CODE_TO_CATEGORY = {
+    "wifi": "connectivity",
+    "internet": "connectivity",
+    "parking": "services",
+    "breakfast": "food",
+    "restaurant": "food",
+    "bar": "food",
+    "pool": "wellness",
+    "gym": "wellness",
+    "spa": "wellness",
+    "ac": "room",
+    "kitchen": "room",
+    "tv": "room",
+    "concierge": "services",
+    "laundry": "services",
 }
 
 
@@ -368,14 +426,57 @@ class HotelsService:
             if url:
                 image_urls.append(url)
 
-        # Map amenities
+        # Map amenities with categories and free/paid status
         amenity_details = []
+        amenities_by_category: Dict[str, List[AmenityDetail]] = {
+            "connectivity": [],
+            "food": [],
+            "wellness": [],
+            "room": [],
+            "services": [],
+            "general": []
+        }
+
         for facility in facilities:
             name = facility.get("facility_name", facility.get("name", ""))
-            if name:
-                normalized = self._normalize_amenities([name])
-                code = normalized[0] if normalized else name.lower().replace(" ", "_")
-                amenity_details.append(AmenityDetail(code=code, label=name))
+            if not name:
+                continue
+
+            # Get normalized code
+            normalized = self._normalize_amenities([name])
+            code = normalized[0] if normalized else name.lower().replace(" ", "_")[:50]
+
+            # Determine category from facility_type_name or fallback to code mapping
+            facility_type = facility.get("facility_type_name", "")
+            category = FACILITY_CATEGORY_MAPPING.get(facility_type)
+            if not category:
+                category = AMENITY_CODE_TO_CATEGORY.get(code, "general")
+
+            # Determine free/paid status
+            is_free = facility.get("is_free")
+            if is_free is None:
+                paid = facility.get("paid")
+                if paid is not None:
+                    is_free = not paid
+
+            amenity = AmenityDetail(
+                code=code,
+                label=name,
+                category=category,
+                isFree=is_free
+            )
+            amenity_details.append(amenity)
+            amenities_by_category[category].append(amenity)
+
+        # Build categorized amenities object
+        categorized_amenities = CategorizedAmenities(
+            connectivity=amenities_by_category["connectivity"],
+            food=amenities_by_category["food"],
+            wellness=amenities_by_category["wellness"],
+            room=amenities_by_category["room"],
+            services=amenities_by_category["services"],
+            general=amenities_by_category["general"]
+        )
 
         # Map rooms from 'block' field (new API structure)
         room_options = []
@@ -516,6 +617,7 @@ class HotelsService:
             description=details.get("description", details.get("hotel_description", "")),
             images=image_urls,
             amenities=amenity_details,
+            amenitiesByCategory=categorized_amenities,
             highlights=highlights,
             badges=badges,
             ratingBreakdown=rating_breakdown,
@@ -817,9 +919,11 @@ class HotelsService:
                     cache_info={"cached": True, "cached_at": cached.get("cached_at")}
                 )
 
-        # Fetch all data in parallel (including reviews for rating breakdown)
+        # Fetch all data in parallel (optimized: 4 calls instead of 5)
+        # Note: Rooms are extracted from details.block instead of calling get_hotel_rooms()
+        # which internally calls get_hotel_details() again (duplicate call eliminated)
         try:
-            details, photos, facilities, rooms, reviews = await asyncio.gather(
+            details, photos, facilities, reviews = await asyncio.gather(
                 self.client.get_hotel_details(
                     hotel_id=raw_hotel_id,
                     checkin_date=str(query.checkIn),
@@ -830,15 +934,6 @@ class HotelsService:
                 ),
                 self.client.get_hotel_photos(raw_hotel_id, locale),
                 self.client.get_hotel_facilities(raw_hotel_id, locale),
-                self.client.get_hotel_rooms(
-                    hotel_id=raw_hotel_id,
-                    checkin_date=str(query.checkIn),
-                    checkout_date=str(query.checkOut),
-                    adults_number=total_adults,
-                    room_number=room_count,
-                    currency_code=query.currency,
-                    locale=locale
-                ),
                 self.client.get_hotel_reviews(raw_hotel_id, locale),
                 return_exceptions=True
             )
@@ -850,11 +945,17 @@ class HotelsService:
                 photos = []
             if isinstance(facilities, Exception):
                 facilities = []
-            if isinstance(rooms, Exception):
-                rooms = {}
             if isinstance(reviews, Exception):
                 logger.warning(f"Failed to fetch reviews for {hotel_id}: {reviews}")
                 reviews = {}
+
+            # Extract rooms directly from details response (block field contains room pricing)
+            rooms = {}
+            if isinstance(details, dict):
+                rooms = {
+                    "rooms": details.get("rooms", {}),
+                    "block": details.get("block", [])
+                }
 
         except BookingAPIError as e:
             logger.error(f"Failed to fetch hotel details: {e}")
