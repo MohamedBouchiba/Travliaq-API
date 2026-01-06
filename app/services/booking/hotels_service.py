@@ -592,6 +592,14 @@ class HotelsService:
 
         logger.info(f"Fetched {len(raw_hotels)} unique hotels from {MAX_PAGES} pages for {request.city}")
 
+        # Warn if no results from API (helps diagnose issues like past dates, invalid destinations)
+        if len(raw_hotels) == 0:
+            logger.warning(
+                f"No hotels returned from Booking API for {request.city}, {request.countryCode} "
+                f"({request.checkIn} to {request.checkOut}). "
+                f"dest_id={dest_id}, dest_type={dest_type}"
+            )
+
         all_hotels = []
         for raw in raw_hotels[:MAX_CACHE_HOTELS]:
             hotel = self._map_hotel_result(raw, request.currency, num_nights)

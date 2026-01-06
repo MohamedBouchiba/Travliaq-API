@@ -127,6 +127,45 @@ async def search_hotels(
     Returns a list of hotels matching the search criteria, with coordinates
     for map display and pricing information.
     """
+    # Validate dates
+    today = date.today()
+    if request.checkIn < today:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "PAST_DATE",
+                    "message": f"Check-in date {request.checkIn} cannot be in the past. Today is {today}.",
+                    "details": None
+                }
+            }
+        )
+    if request.checkOut <= request.checkIn:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "INVALID_DATE_RANGE",
+                    "message": f"Check-out date must be after check-in date.",
+                    "details": None
+                }
+            }
+        )
+    if (request.checkOut - request.checkIn).days > 30:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "STAY_TOO_LONG",
+                    "message": "Maximum stay is 30 nights.",
+                    "details": None
+                }
+            }
+        )
+
     try:
         response = await service.search_hotels(request, force_refresh=force_refresh)
         return response
@@ -229,6 +268,33 @@ async def get_hotel_details(
 
     Returns complete hotel details including photos, amenities, rooms, and policies.
     """
+    # Validate dates
+    today = date.today()
+    if checkIn < today:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "PAST_DATE",
+                    "message": f"Check-in date {checkIn} cannot be in the past. Today is {today}.",
+                    "details": None
+                }
+            }
+        )
+    if checkOut <= checkIn:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "INVALID_DATE_RANGE",
+                    "message": f"Check-out date must be after check-in date.",
+                    "details": None
+                }
+            }
+        )
+
     try:
         query = HotelDetailsQuery(
             checkIn=checkIn,
@@ -348,6 +414,33 @@ async def get_map_prices(
 
     Returns the cheapest hotel price for each requested city.
     """
+    # Validate dates
+    today = date.today()
+    if request.checkIn < today:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "PAST_DATE",
+                    "message": f"Check-in date {request.checkIn} cannot be in the past. Today is {today}.",
+                    "details": None
+                }
+            }
+        )
+    if request.checkOut <= request.checkIn:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "success": False,
+                "error": {
+                    "code": "INVALID_DATE_RANGE",
+                    "message": f"Check-out date must be after check-in date.",
+                    "details": None
+                }
+            }
+        )
+
     try:
         # Validate number of cities
         if len(request.cities) > 20:
