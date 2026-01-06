@@ -5,6 +5,7 @@ import asyncio
 import logging
 import hashlib
 import json
+import math
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any, Tuple
 
@@ -283,8 +284,8 @@ class HotelsService:
                 stars=stars,
                 rating=rating if rating else None,
                 reviewCount=review_count,
-                pricePerNight=round(price_per_night, 2),
-                totalPrice=round(price_per_night * num_nights, 2) if price_per_night else None,
+                pricePerNight=math.ceil(price_per_night),
+                totalPrice=math.ceil(price_per_night * num_nights) if price_per_night else None,
                 currency=currency,
                 address=raw.get("address", raw.get("address_trans", "")),
                 distanceFromCenter=raw.get("distance_to_cc", raw.get("distance")),
@@ -368,8 +369,8 @@ class HotelsService:
                 description=room_info.get("description", block.get("room_description")),
                 maxOccupancy=int(block.get("max_occupancy", block.get("max_persons", 2))),
                 bedType=bed_type,
-                pricePerNight=round(price_per_night, 2),
-                totalPrice=round(price_per_night * num_nights, 2),
+                pricePerNight=math.ceil(price_per_night),
+                totalPrice=math.ceil(price_per_night * num_nights),
                 amenities=self._normalize_amenities(room_info.get("facilities", [])),
                 cancellationFree=block.get("refundable", block.get("is_free_cancellable", False))
             ))
@@ -820,7 +821,7 @@ class HotelsService:
                     if mongo_price:
                         min_price, currency = mongo_price
                         prices[city_key] = CityPriceResult(
-                            minPrice=round(min_price, 2),
+                            minPrice=math.ceil(min_price),
                             currency=currency
                         )
                         logger.info(f"Map price from MongoDB: {city.city} -> {min_price} {currency}")
@@ -890,7 +891,7 @@ class HotelsService:
                                 min_price = price
 
                         result = CityPriceResult(
-                            minPrice=round(min_price, 2) if min_price else None,
+                            minPrice=math.ceil(min_price) if min_price else None,
                             currency=request.currency
                         ) if min_price else None
 
