@@ -161,6 +161,23 @@ class AmenityDetail(BaseModel):
     label: str
 
 
+class RatingBreakdown(BaseModel):
+    """Sous-ratings détaillés (scores 0-10)."""
+    cleanliness: Optional[float] = None     # Propreté
+    staff: Optional[float] = None           # Personnel
+    location: Optional[float] = None        # Emplacement
+    facilities: Optional[float] = None      # Équipements
+    comfort: Optional[float] = None         # Confort
+    valueForMoney: Optional[float] = None   # Rapport qualité/prix
+
+
+class PropertyBadge(BaseModel):
+    """Badge/avantage visible de l'hôtel."""
+    code: str       # "free_breakfast", "free_cancellation", "pool", "spa"
+    label: str      # "Petit-déjeuner inclus", "Annulation gratuite"
+    icon: Optional[str] = None  # Hint icône: "coffee", "shield", "waves"
+
+
 class HotelPolicies(BaseModel):
     """Hotel policies."""
     checkIn: Optional[str] = None
@@ -196,6 +213,8 @@ class HotelDetails(BaseModel):
     images: List[str] = Field(default_factory=list)
     amenities: List[AmenityDetail] = Field(default_factory=list)
     highlights: List[str] = Field(default_factory=list)
+    badges: List[PropertyBadge] = Field(default_factory=list)
+    ratingBreakdown: Optional[RatingBreakdown] = None
     policies: Optional[HotelPolicies] = None
     rooms: List[RoomOption] = Field(default_factory=list)
     bookingUrl: Optional[str] = None

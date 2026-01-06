@@ -12,7 +12,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from app.models.hotels import (
     HotelSearchRequest, HotelSearchResponse, HotelSearchResults, HotelResult,
     HotelDetailsQuery, HotelDetailsResponse, HotelDetails, AmenityDetail,
-    HotelPolicies, RoomOption,
+    HotelPolicies, RoomOption, RatingBreakdown, PropertyBadge,
     MapPricesRequest, MapPricesResponse, CityPriceResult,
     HotelSortBy, PropertyType, HotelAmenity
 )
@@ -209,6 +209,57 @@ class HotelsService:
 
         return list(normalized)
 
+    def _badge_text_to_code(self, text: str) -> str:
+        """Convertir texte badge en code normalisé."""
+        text_lower = text.lower()
+        if "breakfast" in text_lower or "petit" in text_lower or "déjeuner" in text_lower:
+            return "free_breakfast"
+        if "wifi" in text_lower or "internet" in text_lower:
+            return "free_wifi"
+        if "pool" in text_lower or "piscine" in text_lower:
+            return "pool"
+        if "spa" in text_lower or "wellness" in text_lower or "bien-être" in text_lower:
+            return "spa"
+        if "parking" in text_lower:
+            return "free_parking"
+        if "cancel" in text_lower or "annulation" in text_lower:
+            return "free_cancellation"
+        if "gym" in text_lower or "fitness" in text_lower:
+            return "gym"
+        if "restaurant" in text_lower:
+            return "restaurant"
+        if "bar" in text_lower or "lounge" in text_lower:
+            return "bar"
+        if "air" in text_lower or "climatisation" in text_lower:
+            return "ac"
+        # Default: sanitize text to code
+        return text_lower.replace(" ", "_").replace("-", "_")[:30]
+
+    def _badge_code_to_icon(self, code: str) -> str:
+        """Mapper code badge vers icône hint pour le frontend."""
+        icons = {
+            "free_breakfast": "coffee",
+            "free_wifi": "wifi",
+            "pool": "waves",
+            "spa": "sparkles",
+            "free_parking": "car",
+            "free_cancellation": "shield",
+            "gym": "dumbbell",
+            "restaurant": "utensils",
+            "bar": "coffee",
+            "ac": "snowflake",
+        }
+        return icons.get(code, "check")
+
+    def _safe_float(self, value: Any) -> Optional[float]:
+        """Safely convert value to float, returning None if not possible."""
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
     def _map_hotel_result(self, raw: dict, currency: str, num_nights: int) -> Optional[HotelResult]:
         """Map raw Booking.com hotel to our HotelResult model."""
         try:
@@ -303,6 +354,7 @@ class HotelsService:
         photos: List[dict],
         facilities: List[dict],
         rooms: dict,
+        reviews: dict,
         currency: str,
         num_nights: int
     ) -> HotelDetails:
@@ -393,6 +445,64 @@ class HotelsService:
         if details.get("class", 0) >= 4:
             highlights.append("Hôtel de standing")
 
+        # Extract badges from property_highlight_strip and other sources
+        badges = []
+        seen_codes = set()
+
+        # From property_highlight_strip (Booking.com highlights)
+        highlight_strip = details.get("property_highlight_strip", [])
+        for highlight in highlight_strip:
+            badge_text = highlight.get("text", highlight.get("name", ""))
+            if badge_text:
+                code = self._badge_text_to_code(badge_text)
+                if code not in seen_codes:
+                    seen_codes.add(code)
+                    badges.append(PropertyBadge(
+                        code=code,
+                        label=badge_text,
+                        icon=self._badge_code_to_icon(code)
+                    ))
+
+        # From badges field if present
+        for badge in details.get("badges", []):
+            badge_text = badge.get("text", badge.get("badge_text", ""))
+            if badge_text:
+                code = self._badge_text_to_code(badge_text)
+                if code not in seen_codes:
+                    seen_codes.add(code)
+                    badges.append(PropertyBadge(
+                        code=code,
+                        label=badge_text,
+                        icon=self._badge_code_to_icon(code)
+                    ))
+
+        # Add free cancellation badge if any room has it
+        if any(block.get("refundable") or block.get("is_free_cancellable") for block in block_data):
+            if "free_cancellation" not in seen_codes:
+                badges.append(PropertyBadge(
+                    code="free_cancellation",
+                    label="Annulation gratuite disponible",
+                    icon="shield"
+                ))
+
+        # Extract rating breakdown from reviews
+        rating_breakdown = None
+        if isinstance(reviews, dict) and reviews:
+            # Try different possible structures from Booking API
+            scores = reviews.get("scores", reviews.get("review_score_breakdown", {}))
+            if not scores:
+                # Try to find scores in review_breakdown
+                scores = reviews.get("review_breakdown", {})
+            if scores:
+                rating_breakdown = RatingBreakdown(
+                    cleanliness=self._safe_float(scores.get("cleanliness", scores.get("Cleanliness"))),
+                    staff=self._safe_float(scores.get("staff", scores.get("Staff"))),
+                    location=self._safe_float(scores.get("location", scores.get("Location"))),
+                    facilities=self._safe_float(scores.get("facilities", scores.get("Facilities"))),
+                    comfort=self._safe_float(scores.get("comfort", scores.get("Comfort"))),
+                    valueForMoney=self._safe_float(scores.get("value_for_money", scores.get("value", scores.get("Value for money"))))
+                )
+
         return HotelDetails(
             id=f"htl_{hotel_id}",
             name=details.get("hotel_name", details.get("name", "Unknown")),
@@ -407,6 +517,8 @@ class HotelsService:
             images=image_urls,
             amenities=amenity_details,
             highlights=highlights,
+            badges=badges,
+            ratingBreakdown=rating_breakdown,
             policies=policies,
             rooms=room_options,
             bookingUrl=details.get("url")
@@ -705,9 +817,9 @@ class HotelsService:
                     cache_info={"cached": True, "cached_at": cached.get("cached_at")}
                 )
 
-        # Fetch all data in parallel
+        # Fetch all data in parallel (including reviews for rating breakdown)
         try:
-            details, photos, facilities, rooms = await asyncio.gather(
+            details, photos, facilities, rooms, reviews = await asyncio.gather(
                 self.client.get_hotel_details(
                     hotel_id=raw_hotel_id,
                     checkin_date=str(query.checkIn),
@@ -727,6 +839,7 @@ class HotelsService:
                     currency_code=query.currency,
                     locale=locale
                 ),
+                self.client.get_hotel_reviews(raw_hotel_id, locale),
                 return_exceptions=True
             )
 
@@ -739,13 +852,16 @@ class HotelsService:
                 facilities = []
             if isinstance(rooms, Exception):
                 rooms = {}
+            if isinstance(reviews, Exception):
+                logger.warning(f"Failed to fetch reviews for {hotel_id}: {reviews}")
+                reviews = {}
 
         except BookingAPIError as e:
             logger.error(f"Failed to fetch hotel details: {e}")
             return HotelDetailsResponse(success=False, hotel=None)
 
         # Map to our model
-        hotel = self._map_hotel_details(details, photos, facilities, rooms, query.currency, num_nights)
+        hotel = self._map_hotel_details(details, photos, facilities, rooms, reviews, query.currency, num_nights)
 
         # Cache results
         settings = get_settings()
