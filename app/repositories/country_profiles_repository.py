@@ -41,6 +41,22 @@ class CountryProfilesRepository:
         await self.collection.create_index("trending_score")
         logger.info("Country profiles indexes created")
 
+    async def preload_profiles(self) -> int:
+        """
+        Preload all profiles into memory at startup for instant access.
+
+        Call this method in startup_event() to eliminate cold-start latency.
+
+        Returns:
+            Number of profiles loaded
+        """
+        profiles = await self.collection.find({}).to_list(length=200)
+        self._cache = profiles
+        self._cache_time = time.time()
+        count = len(profiles)
+        logger.info(f"Preloaded {count} country profiles into memory")
+        return count
+
     async def get_all_profiles(self, use_cache: bool = True) -> list[dict]:
         """
         Get all country profiles with optional in-memory caching.

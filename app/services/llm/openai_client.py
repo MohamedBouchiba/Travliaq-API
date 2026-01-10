@@ -196,7 +196,7 @@ Sois specifique et evite les phrases generiques comme "Decouvrez" ou "Explorez".
         self,
         destinations: list[dict],
         user_preferences: dict,
-        max_concurrent: int = 3,
+        max_concurrent: int = 5,
     ) -> list[tuple[str, str, str]]:
         """
         Generate content for multiple destinations concurrently.

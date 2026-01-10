@@ -256,6 +256,10 @@ async def startup_event() -> None:
     app.state.country_profiles_repo = CountryProfilesRepository(country_profiles_collection)
     await app.state.country_profiles_repo.create_indexes()
 
+    # Preload all country profiles into memory for instant access
+    profiles_count = await app.state.country_profiles_repo.preload_profiles()
+    logger.info(f"Country profiles preloaded: {profiles_count} countries ready")
+
     # Initialize OpenAI LLM client (optional)
     if settings.llm_enabled:
         app.state.openai_client = OpenAIClient(

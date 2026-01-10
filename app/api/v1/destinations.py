@@ -65,10 +65,15 @@ def get_suggestions_service(request: Request):
     Each suggestion includes:
     - **matchScore**: 0-100 score indicating how well the destination matches
     - **keyFactors**: 3-5 specific reasons explaining the match
-    - **headline/description**: LLM-generated personalized content
+    - **headline/description**: LLM-generated personalized content (or pre-computed if fast_mode)
     - **estimatedBudgetPerPerson**: Budget estimate for 7 days
     - **topActivities**: Top 5 activities in the destination
     - **bestSeasons**: Best times to visit
+
+    ## Performance Modes
+
+    - **fast_mode=false** (default): Uses LLM to generate personalized headlines (~1-2s)
+    - **fast_mode=true**: Uses pre-computed headlines for instant response (~100ms)
 
     ## Caching
 
@@ -107,6 +112,10 @@ async def suggest_destinations(
         False,
         description="Bypass cache and generate fresh suggestions",
     ),
+    fast_mode: bool = Query(
+        False,
+        description="Skip LLM generation for faster response (~100ms vs ~1-2s)",
+    ),
     service=Depends(get_suggestions_service),
 ):
     """
@@ -120,6 +129,7 @@ async def suggest_destinations(
             preferences=preferences,
             limit=limit,
             force_refresh=force_refresh,
+            fast_mode=fast_mode,
         )
         return response
 

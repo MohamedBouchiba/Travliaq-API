@@ -73,7 +73,15 @@ COUNTRY_PROFILES = [
             {"name": "Chateaux de la Loire", "emoji": "european_castle", "category": "history"},
             {"name": "Cote d'Azur", "emoji": "beach", "category": "beach"},
             {"name": "Mont Saint-Michel", "emoji": "mountain", "category": "culture"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "France, l'art de vivre en solo",
+            "couple": "Paris romantique et terroirs francais",
+            "family": "La France en famille, histoire et saveurs",
+            "friends": "France entre amis, vins et culture",
+            "pet": "France avec votre compagnon"
+        },
+        "fallback_description": "Gastronomie, patrimoine et art de vivre a la francaise."
     },
     {
         "country_code": "ES",
@@ -117,7 +125,15 @@ COUNTRY_PROFILES = [
             {"name": "Plages de Barcelone", "emoji": "beach", "category": "beach"},
             {"name": "Flamenco a Seville", "emoji": "dancer", "category": "culture"},
             {"name": "Alhambra de Grenade", "emoji": "mosque", "category": "history"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Espagne, soleil et tapas en solo",
+            "couple": "Romantisme espagnol, flamenco et plages",
+            "family": "Espagne en famille, plages et fiestas",
+            "friends": "Espagne entre amis, tapas et nightlife",
+            "pet": "Espagne avec votre compagnon"
+        },
+        "fallback_description": "Tapas, flamenco, plages paradisiaques et art de vivre mediterraneen."
     },
     {
         "country_code": "IT",
@@ -161,7 +177,15 @@ COUNTRY_PROFILES = [
             {"name": "Pizza a Naples", "emoji": "pizza", "category": "food"},
             {"name": "Toscane viticole", "emoji": "wine_glass", "category": "food"},
             {"name": "Cote Amalfitaine", "emoji": "beach", "category": "beach"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Italie, dolce vita en solo",
+            "couple": "Romance italienne, Venise et Toscane",
+            "family": "Italie en famille, histoire et pizza",
+            "friends": "Italie entre amis, vins et dolce vita",
+            "pet": "Italie avec votre compagnon"
+        },
+        "fallback_description": "Art, gastronomie et romantisme a l'italienne."
     },
     {
         "country_code": "PT",
@@ -205,7 +229,15 @@ COUNTRY_PROFILES = [
             {"name": "Caves de Porto", "emoji": "wine_glass", "category": "food"},
             {"name": "Plages de l'Algarve", "emoji": "beach", "category": "beach"},
             {"name": "Sintra", "emoji": "european_castle", "category": "culture"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Portugal, saudade et liberte en solo",
+            "couple": "Portugal romantique, Porto et Lisbonne",
+            "family": "Portugal en famille, plages et pasteis",
+            "friends": "Portugal entre amis, surf et nightlife",
+            "pet": "Portugal avec votre compagnon"
+        },
+        "fallback_description": "Pasteis de nata, fado et plages dorees de l'Atlantique."
     },
     {
         "country_code": "GR",
@@ -249,7 +281,15 @@ COUNTRY_PROFILES = [
             {"name": "Mykonos", "emoji": "night_with_stars", "category": "nightlife"},
             {"name": "Gastronomie grecque", "emoji": "plate_with_cutlery", "category": "food"},
             {"name": "Meteores", "emoji": "mountain", "category": "nature"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Grece, odyssee en solo",
+            "couple": "Iles grecques romantiques, Santorin",
+            "family": "Grece en famille, mythes et plages",
+            "friends": "Grece entre amis, Mykonos et histoire",
+            "pet": "Grece avec votre compagnon"
+        },
+        "fallback_description": "Iles paradisiaques, histoire antique et meze au soleil."
     },
     {
         "country_code": "DE",
@@ -293,7 +333,15 @@ COUNTRY_PROFILES = [
             {"name": "Chateau Neuschwanstein", "emoji": "european_castle", "category": "culture"},
             {"name": "Foret-Noire", "emoji": "evergreen_tree", "category": "nature"},
             {"name": "Vie nocturne Berlin", "emoji": "night_with_stars", "category": "nightlife"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Allemagne, culture et techno en solo",
+            "couple": "Allemagne romantique, chateaux et bieres",
+            "family": "Allemagne en famille, contes et nature",
+            "friends": "Allemagne entre amis, Berlin et Munich",
+            "pet": "Allemagne avec votre compagnon"
+        },
+        "fallback_description": "Chateaux feeriques, biergartens et scene culturelle vibrante."
     },
     {
         "country_code": "GB",
@@ -337,7 +385,15 @@ COUNTRY_PROFILES = [
             {"name": "Highlands d'Ecosse", "emoji": "mountain", "category": "nature"},
             {"name": "Pubs traditionnels", "emoji": "beer", "category": "food"},
             {"name": "Stonehenge", "emoji": "moyai", "category": "history"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Royaume-Uni, Londres et pubs en solo",
+            "couple": "UK romantique, Londres et Ecosse",
+            "family": "Royaume-Uni en famille, Harry Potter",
+            "friends": "UK entre amis, pubs et football",
+            "pet": "UK avec votre compagnon"
+        },
+        "fallback_description": "Pubs historiques, musees gratuits et Highlands sauvages."
     },
     {
         "country_code": "NL",
@@ -381,7 +437,15 @@ COUNTRY_PROFILES = [
             {"name": "Champs de tulipes", "emoji": "tulip", "category": "nature"},
             {"name": "Velo dans la ville", "emoji": "bike", "category": "adventure"},
             {"name": "Coffee shops", "emoji": "coffee", "category": "nightlife"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Pays-Bas, velo et liberte en solo",
+            "couple": "Amsterdam romantique, canaux et art",
+            "family": "Pays-Bas en famille, tulipes et moulins",
+            "friends": "Pays-Bas entre amis, nightlife libre",
+            "pet": "Pays-Bas avec votre compagnon"
+        },
+        "fallback_description": "Canaux pittoresques, maitres flamands et ambiance libre."
     },
     {
         "country_code": "AT",
@@ -425,7 +489,15 @@ COUNTRY_PROFILES = [
             {"name": "Operas et concerts", "emoji": "musical_note", "category": "culture"},
             {"name": "Cafes viennois", "emoji": "coffee", "category": "food"},
             {"name": "Salzbourg", "emoji": "church", "category": "history"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Autriche, musique et ski en solo",
+            "couple": "Vienne romantique, valses et cafes",
+            "family": "Autriche en famille, Sound of Music",
+            "friends": "Autriche entre amis, ski et apres-ski",
+            "pet": "Autriche avec votre compagnon"
+        },
+        "fallback_description": "Palais imperiaux, concerts classiques et Alpes majestueuses."
     },
     {
         "country_code": "CH",
@@ -469,7 +541,15 @@ COUNTRY_PROFILES = [
             {"name": "Chocolateries", "emoji": "chocolate_bar", "category": "food"},
             {"name": "Train panoramique", "emoji": "train", "category": "adventure"},
             {"name": "Lac Leman", "emoji": "water", "category": "nature"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Suisse, montagnes et liberte en solo",
+            "couple": "Suisse romantique, lacs et neige",
+            "family": "Suisse en famille, nature et chocolat",
+            "friends": "Suisse entre amis, ski et fondue",
+            "pet": "Suisse avec votre compagnon"
+        },
+        "fallback_description": "Sommets alpins, trains panoramiques et chocolat artisanal."
     },
     {
         "country_code": "HR",
@@ -513,7 +593,15 @@ COUNTRY_PROFILES = [
             {"name": "Plages de l'Adriatique", "emoji": "beach", "category": "beach"},
             {"name": "Voile dans les iles", "emoji": "sailboat", "category": "adventure"},
             {"name": "Split et Diocletien", "emoji": "classical_building", "category": "history"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Croatie, Adriatique en solo",
+            "couple": "Croatie romantique, Dubrovnik et iles",
+            "family": "Croatie en famille, plages et nature",
+            "friends": "Croatie entre amis, voile et fiestas",
+            "pet": "Croatie avec votre compagnon"
+        },
+        "fallback_description": "Cote adriatique spectaculaire, villes medievales et parcs naturels."
     },
     {
         "country_code": "CZ",
@@ -557,7 +645,15 @@ COUNTRY_PROFILES = [
             {"name": "Pont Charles", "emoji": "bridge_at_night", "category": "history"},
             {"name": "Karlovy Vary", "emoji": "hotsprings", "category": "wellness"},
             {"name": "Marches de Noel", "emoji": "christmas_tree", "category": "culture"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Prague, bieres et histoire en solo",
+            "couple": "Prague romantique, ponts et chateaux",
+            "family": "Republique Tcheque en famille",
+            "friends": "Prague entre amis, bieres et nightlife",
+            "pet": "Prague avec votre compagnon"
+        },
+        "fallback_description": "Prague magique, bieres artisanales et architecture gothique."
     },
     # === ASIA (18 countries) ===
     {
@@ -602,7 +698,15 @@ COUNTRY_PROFILES = [
             {"name": "Sushi et ramen", "emoji": "sushi", "category": "food"},
             {"name": "Tokyo futuriste", "emoji": "tokyo_tower", "category": "culture"},
             {"name": "Onsen japonais", "emoji": "hotsprings", "category": "wellness"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Japon, zen et modernite en solo",
+            "couple": "Japon romantique, cerisiers et ryokans",
+            "family": "Japon en famille, traditions et tech",
+            "friends": "Japon entre amis, Tokyo et Kyoto",
+            "pet": "Japon avec votre compagnon"
+        },
+        "fallback_description": "Traditions millenaires, gastronomie raffinee et technologie futuriste."
     },
     {
         "country_code": "TH",
@@ -646,7 +750,15 @@ COUNTRY_PROFILES = [
             {"name": "Street food thai", "emoji": "ramen", "category": "food"},
             {"name": "Massage traditionnel", "emoji": "spa", "category": "wellness"},
             {"name": "Chiang Mai", "emoji": "elephant", "category": "nature"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Thailande, plages et temples en solo",
+            "couple": "Thailande romantique, iles paradisiaques",
+            "family": "Thailande en famille, plages et elephants",
+            "friends": "Thailande entre amis, full moon party",
+            "pet": "Thailande avec votre compagnon"
+        },
+        "fallback_description": "Plages de reve, temples dores et street food legendaire."
     },
     {
         "country_code": "VN",
@@ -690,7 +802,15 @@ COUNTRY_PROFILES = [
             {"name": "Hoi An historique", "emoji": "lantern", "category": "culture"},
             {"name": "Delta du Mekong", "emoji": "boat", "category": "adventure"},
             {"name": "Motorbike tours", "emoji": "motor_scooter", "category": "adventure"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Vietnam, aventure solo authentique",
+            "couple": "Vietnam romantique, Ha Long et Hoi An",
+            "family": "Vietnam en famille, culture et nature",
+            "friends": "Vietnam entre amis, road trip moto",
+            "pet": "Vietnam avec votre compagnon"
+        },
+        "fallback_description": "Baie d'Ha Long, street food incroyable et authenticite preservee."
     },
     {
         "country_code": "ID",
@@ -734,7 +854,15 @@ COUNTRY_PROFILES = [
             {"name": "Yoga retreats", "emoji": "yoga", "category": "wellness"},
             {"name": "Rizieres d'Ubud", "emoji": "rice", "category": "nature"},
             {"name": "Plongee Komodo", "emoji": "fish", "category": "adventure"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Indonesie, Bali et zen en solo",
+            "couple": "Bali romantique, temples et rizieres",
+            "family": "Indonesie en famille, plages et nature",
+            "friends": "Bali entre amis, surf et fetes",
+            "pet": "Indonesie avec votre compagnon"
+        },
+        "fallback_description": "Temples mystiques, plages de sable fin et wellness a Ubud."
     },
     {
         "country_code": "KR",
@@ -778,7 +906,15 @@ COUNTRY_PROFILES = [
             {"name": "Palais de Seoul", "emoji": "temple", "category": "history"},
             {"name": "Shopping a Myeongdong", "emoji": "shopping_bags", "category": "shopping"},
             {"name": "DMZ visite", "emoji": "military_helmet", "category": "history"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Coree du Sud, K-culture en solo",
+            "couple": "Seoul romantique, tradition et modernite",
+            "family": "Coree en famille, technologie et palais",
+            "friends": "Seoul entre amis, K-pop et nightlife",
+            "pet": "Coree avec votre compagnon"
+        },
+        "fallback_description": "K-pop, barbecue coreen et palais royaux a Seoul."
     },
     {
         "country_code": "SG",
@@ -822,7 +958,15 @@ COUNTRY_PROFILES = [
             {"name": "Gardens by the Bay", "emoji": "blossom", "category": "nature"},
             {"name": "Shopping Orchard Road", "emoji": "shopping_bags", "category": "shopping"},
             {"name": "Sentosa Island", "emoji": "beach", "category": "beach"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Singapour, futurisme en solo",
+            "couple": "Singapour romantique, gardens et skyline",
+            "family": "Singapour en famille, attractions uniques",
+            "friends": "Singapour entre amis, food et rooftops",
+            "pet": "Singapour avec votre compagnon"
+        },
+        "fallback_description": "Cite-etat futuriste, hawker food legendaire et jardins spectaculaires."
     },
     {
         "country_code": "AE",
@@ -866,7 +1010,15 @@ COUNTRY_PROFILES = [
             {"name": "Dubai Mall", "emoji": "shopping_cart", "category": "shopping"},
             {"name": "Plages de luxe", "emoji": "beach", "category": "beach"},
             {"name": "Louvre Abu Dhabi", "emoji": "art", "category": "art"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Dubai, luxe et desert en solo",
+            "couple": "Dubai romantique, skyline et plages",
+            "family": "Dubai en famille, parcs et attractions",
+            "friends": "Dubai entre amis, shopping et brunch",
+            "pet": "Emirats avec votre compagnon"
+        },
+        "fallback_description": "Luxe absolu, gratte-ciels vertigineux et experiences desert."
     },
     {
         "country_code": "IN",
@@ -910,7 +1062,15 @@ COUNTRY_PROFILES = [
             {"name": "Yoga a Rishikesh", "emoji": "yoga", "category": "wellness"},
             {"name": "Kerala backwaters", "emoji": "boat", "category": "nature"},
             {"name": "Rajasthan palais", "emoji": "classical_building", "category": "culture"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Inde, eveil spirituel en solo",
+            "couple": "Inde romantique, Taj Mahal et palais",
+            "family": "Inde en famille, couleurs et traditions",
+            "friends": "Inde entre amis, aventure et curry",
+            "pet": "Inde avec votre compagnon"
+        },
+        "fallback_description": "Spiritualite, palais somptueux et cuisine aux mille saveurs."
     },
     # === AMERICAS (12 countries) ===
     {
@@ -955,7 +1115,15 @@ COUNTRY_PROFILES = [
             {"name": "Las Vegas", "emoji": "slot_machine", "category": "nightlife"},
             {"name": "Parcs nationaux", "emoji": "evergreen_tree", "category": "nature"},
             {"name": "Miami Beach", "emoji": "beach", "category": "beach"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "USA, road trip solo mythique",
+            "couple": "USA romantique, NYC et Californie",
+            "family": "USA en famille, parcs et Disney",
+            "friends": "USA entre amis, Vegas et roadtrip",
+            "pet": "USA avec votre compagnon"
+        },
+        "fallback_description": "Road trips epiques, parcs nationaux grandioses et villes iconiques."
     },
     {
         "country_code": "MX",
@@ -999,7 +1167,15 @@ COUNTRY_PROFILES = [
             {"name": "Tacos et guacamole", "emoji": "taco", "category": "food"},
             {"name": "Mexico City", "emoji": "city_sunset", "category": "culture"},
             {"name": "Oaxaca artisanat", "emoji": "art", "category": "culture"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Mexique, tacos et pyramides en solo",
+            "couple": "Mexique romantique, plages et ruines",
+            "family": "Mexique en famille, Cancun et culture",
+            "friends": "Mexique entre amis, fiestas et plages",
+            "pet": "Mexique avec votre compagnon"
+        },
+        "fallback_description": "Pyramides mayas, plages caribbeennes et gastronomie explosive."
     },
     {
         "country_code": "BR",
@@ -1043,7 +1219,15 @@ COUNTRY_PROFILES = [
             {"name": "Carnaval", "emoji": "dancer", "category": "culture"},
             {"name": "Plages de Copacabana", "emoji": "beach", "category": "beach"},
             {"name": "Chutes d'Iguazu", "emoji": "water", "category": "nature"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Bresil, samba et aventure en solo",
+            "couple": "Bresil romantique, Rio et plages",
+            "family": "Bresil en famille, nature et culture",
+            "friends": "Bresil entre amis, carnaval et fetes",
+            "pet": "Bresil avec votre compagnon"
+        },
+        "fallback_description": "Carnaval de Rio, plages mythiques et nature amazonienne."
     },
     {
         "country_code": "PE",
@@ -1087,7 +1271,15 @@ COUNTRY_PROFILES = [
             {"name": "Cusco colonial", "emoji": "church", "category": "culture"},
             {"name": "Lac Titicaca", "emoji": "water", "category": "nature"},
             {"name": "Nazca lignes", "emoji": "small_airplane", "category": "adventure"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Perou, Incas et aventure en solo",
+            "couple": "Perou romantique, Machu Picchu",
+            "family": "Perou en famille, histoire vivante",
+            "friends": "Perou entre amis, trek et ceviche",
+            "pet": "Perou avec votre compagnon"
+        },
+        "fallback_description": "Machu Picchu legendaire, ceviche frais et tresors incas."
     },
     {
         "country_code": "CR",
@@ -1131,7 +1323,15 @@ COUNTRY_PROFILES = [
             {"name": "Observation faune", "emoji": "monkey", "category": "nature"},
             {"name": "Surf Pacifique", "emoji": "surfing_man", "category": "sports"},
             {"name": "Eco-lodges", "emoji": "house_with_garden", "category": "wellness"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Costa Rica, pura vida en solo",
+            "couple": "Costa Rica romantique, jungle et plages",
+            "family": "Costa Rica en famille, nature vivante",
+            "friends": "Costa Rica entre amis, surf et volcans",
+            "pet": "Costa Rica avec votre compagnon"
+        },
+        "fallback_description": "Biodiversite exceptionnelle, volcans et plages des deux oceans."
     },
     # === AFRICA (9 countries) ===
     {
@@ -1176,7 +1376,15 @@ COUNTRY_PROFILES = [
             {"name": "Tajines et couscous", "emoji": "stew", "category": "food"},
             {"name": "Riads traditionnels", "emoji": "house", "category": "culture"},
             {"name": "Hammam spa", "emoji": "spa", "category": "wellness"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Maroc, medinas et desert en solo",
+            "couple": "Maroc romantique, riads et couchers soleil",
+            "family": "Maroc en famille, souks et aventure",
+            "friends": "Maroc entre amis, desert et tajines",
+            "pet": "Maroc avec votre compagnon"
+        },
+        "fallback_description": "Medinas envoûtantes, dunes sahariennes et hospitalite marocaine."
     },
     {
         "country_code": "EG",
@@ -1220,7 +1428,15 @@ COUNTRY_PROFILES = [
             {"name": "Temples de Louxor", "emoji": "classical_building", "category": "history"},
             {"name": "Plongee Mer Rouge", "emoji": "fish", "category": "adventure"},
             {"name": "Sphinx et Caire", "emoji": "sphinx", "category": "culture"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Egypte, pharaons et Nil en solo",
+            "couple": "Egypte romantique, croisiere sur le Nil",
+            "family": "Egypte en famille, pyramides et mysteres",
+            "friends": "Egypte entre amis, histoire et plongee",
+            "pet": "Egypte avec votre compagnon"
+        },
+        "fallback_description": "Pyramides millenaires, croisiere sur le Nil et tresors pharaoniques."
     },
     {
         "country_code": "ZA",
@@ -1264,7 +1480,15 @@ COUNTRY_PROFILES = [
             {"name": "Route des vins", "emoji": "wine_glass", "category": "food"},
             {"name": "Garden Route", "emoji": "national_park", "category": "nature"},
             {"name": "Cage aux requins", "emoji": "shark", "category": "adventure"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Afrique du Sud, safari solo epique",
+            "couple": "Afrique du Sud romantique, vins et safari",
+            "family": "Afrique du Sud en famille, Big Five",
+            "friends": "Afrique du Sud entre amis, aventure",
+            "pet": "Afrique du Sud avec votre compagnon"
+        },
+        "fallback_description": "Safaris Big Five, vignobles et Table Mountain."
     },
     {
         "country_code": "KE",
@@ -1308,7 +1532,15 @@ COUNTRY_PROFILES = [
             {"name": "Mont Kenya", "emoji": "mountain", "category": "adventure"},
             {"name": "Plages de Mombasa", "emoji": "beach", "category": "beach"},
             {"name": "Rencontre Maasai", "emoji": "person", "category": "culture"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Kenya, safari solo inoubliable",
+            "couple": "Kenya romantique, safari et plages",
+            "family": "Kenya en famille, Big Five et savane",
+            "friends": "Kenya entre amis, aventure sauvage",
+            "pet": "Kenya avec votre compagnon"
+        },
+        "fallback_description": "Grande migration, Big Five et rencontres Maasai authentiques."
     },
     {
         "country_code": "MU",
@@ -1352,7 +1584,15 @@ COUNTRY_PROFILES = [
             {"name": "Spa de luxe", "emoji": "spa", "category": "wellness"},
             {"name": "Ile aux Cerfs", "emoji": "palm_tree", "category": "beach"},
             {"name": "Grand Bassin", "emoji": "temple", "category": "culture"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Maurice, paradis relaxant en solo",
+            "couple": "Maurice romantique, lune de miel parfaite",
+            "family": "Maurice en famille, plages et lagons",
+            "friends": "Maurice entre amis, plongee et farniente",
+            "pet": "Maurice avec votre compagnon"
+        },
+        "fallback_description": "Lagons turquoise, spas de luxe et cuisine creole."
     },
     # === OCEANIA (4 countries) ===
     {
@@ -1397,7 +1637,15 @@ COUNTRY_PROFILES = [
             {"name": "Outback australien", "emoji": "desert", "category": "adventure"},
             {"name": "Kangourous et koalas", "emoji": "kangaroo", "category": "nature"},
             {"name": "Surf a Gold Coast", "emoji": "surfing_man", "category": "sports"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Australie, road trip solo legendaire",
+            "couple": "Australie romantique, recifs et outback",
+            "family": "Australie en famille, nature unique",
+            "friends": "Australie entre amis, surf et aventure",
+            "pet": "Australie avec votre compagnon"
+        },
+        "fallback_description": "Grande Barriere de Corail, outback rouge et faune unique."
     },
     {
         "country_code": "NZ",
@@ -1441,7 +1689,15 @@ COUNTRY_PROFILES = [
             {"name": "Hobbiton (LOTR)", "emoji": "house_with_garden", "category": "culture"},
             {"name": "Geysers Rotorua", "emoji": "volcano", "category": "nature"},
             {"name": "Randonnee glaciers", "emoji": "ice_cube", "category": "adventure"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Nouvelle-Zelande, aventure solo extreme",
+            "couple": "NZ romantique, fjords et paysages epiques",
+            "family": "Nouvelle-Zelande en famille, Hobbiton",
+            "friends": "NZ entre amis, adrealine et nature",
+            "pet": "Nouvelle-Zelande avec votre compagnon"
+        },
+        "fallback_description": "Paysages du Seigneur des Anneaux, sports extremes et fjords."
     },
     {
         "country_code": "FJ",
@@ -1485,7 +1741,15 @@ COUNTRY_PROFILES = [
             {"name": "Villages traditionnels", "emoji": "hut", "category": "culture"},
             {"name": "Resorts de luxe", "emoji": "hotel", "category": "wellness"},
             {"name": "Kayak lagon", "emoji": "canoe", "category": "adventure"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Fidji, iles de reve en solo",
+            "couple": "Fidji romantique, lune de miel idyllique",
+            "family": "Fidji en famille, plages et culture",
+            "friends": "Fidji entre amis, plongee et detente",
+            "pet": "Fidji avec votre compagnon"
+        },
+        "fallback_description": "Archipel paradisiaque, plongee corallienne et hospitalite fidjienne."
     },
     {
         "country_code": "PF",
@@ -1529,7 +1793,857 @@ COUNTRY_PROFILES = [
             {"name": "Plongee avec raies", "emoji": "fish", "category": "adventure"},
             {"name": "Danse tahitienne", "emoji": "dancer", "category": "culture"},
             {"name": "Moorea montagnes", "emoji": "mountain", "category": "nature"}
-        ]
+        ],
+        "fallback_headlines": {
+            "solo": "Polynesie, paradis du voyageur solo",
+            "couple": "Bora Bora, lune de miel de reve",
+            "family": "Tahiti en famille, magie du Pacifique",
+            "friends": "Aventure entre amis en Polynesie",
+            "pet": "Polynesie avec votre compagnon"
+        },
+        "fallback_description": "Lagons turquoise, bungalows sur pilotis et culture polynesienne authentique."
+    },
+
+    # === NEW COUNTRIES (16 additions to reach 50) ===
+
+    # Europe additions
+    {
+        "country_code": "TR",
+        "country_name": "Turquie",
+        "flag_emoji": "TR",
+        "region": "Europe",
+        "subregion": "Western Asia",
+        "languages": ["Turkish"],
+        "currency": "TRY",
+        "style_scores": {
+            "chill_vs_intense": 40,
+            "city_vs_nature": 50,
+            "eco_vs_luxury": 45,
+            "tourist_vs_local": 55
+        },
+        "interest_scores": {
+            "culture": 95, "food": 90, "beach": 85, "adventure": 70,
+            "nature": 80, "nightlife": 75, "history": 95, "art": 80,
+            "shopping": 90, "wellness": 85, "sports": 60
+        },
+        "must_haves": {
+            "accessibility_score": 60, "pet_friendly_score": 50,
+            "family_friendly_score": 80, "wifi_quality_score": 80
+        },
+        "budget": {
+            "cost_of_living_index": 35,
+            "budget_min_7d": 250, "budget_max_7d": 450,
+            "comfort_min_7d": 450, "comfort_max_7d": 900,
+            "premium_min_7d": 900, "premium_max_7d": 2000,
+            "luxury_min_7d": 2000, "luxury_max_7d": 5000
+        },
+        "travel_style_bonuses": {"solo": 10, "couple": 15, "family": 15, "friends": 15, "pet": 0},
+        "occasion_bonuses": {"honeymoon": 15, "anniversary": 15, "birthday": 10, "vacation": 5, "workation": 5},
+        "best_months": [4, 5, 6, 9, 10],
+        "avoid_months": [7, 8],
+        "best_seasons": ["Printemps", "Automne"],
+        "trending_score": 88,
+        "top_activities": [
+            {"name": "Cappadoce en montgolfiere", "emoji": "balloon", "category": "adventure"},
+            {"name": "Sainte-Sophie Istanbul", "emoji": "mosque", "category": "history"},
+            {"name": "Bains turcs", "emoji": "hot_springs", "category": "wellness"},
+            {"name": "Ephese ruines", "emoji": "classical_building", "category": "history"},
+            {"name": "Plages d'Antalya", "emoji": "beach", "category": "beach"}
+        ],
+        "fallback_headlines": {
+            "solo": "Turquie, carrefour des civilisations",
+            "couple": "Istanbul romantique et plages turquoises",
+            "family": "Turquie en famille, histoire et plages",
+            "friends": "Cappadoce et Istanbul entre amis",
+            "pet": "Turquie avec votre compagnon"
+        },
+        "fallback_description": "Merveilles historiques, cuisine delicieuse et plages mediterraneennes."
+    },
+    {
+        "country_code": "PL",
+        "country_name": "Pologne",
+        "flag_emoji": "PL",
+        "region": "Europe",
+        "subregion": "Eastern Europe",
+        "languages": ["Polish"],
+        "currency": "PLN",
+        "style_scores": {
+            "chill_vs_intense": 50,
+            "city_vs_nature": 55,
+            "eco_vs_luxury": 35,
+            "tourist_vs_local": 60
+        },
+        "interest_scores": {
+            "culture": 85, "food": 80, "beach": 40, "adventure": 55,
+            "nature": 70, "nightlife": 80, "history": 95, "art": 80,
+            "shopping": 70, "wellness": 60, "sports": 55
+        },
+        "must_haves": {
+            "accessibility_score": 70, "pet_friendly_score": 60,
+            "family_friendly_score": 75, "wifi_quality_score": 85
+        },
+        "budget": {
+            "cost_of_living_index": 45,
+            "budget_min_7d": 300, "budget_max_7d": 500,
+            "comfort_min_7d": 500, "comfort_max_7d": 900,
+            "premium_min_7d": 900, "premium_max_7d": 1800,
+            "luxury_min_7d": 1800, "luxury_max_7d": 4000
+        },
+        "travel_style_bonuses": {"solo": 15, "couple": 10, "family": 10, "friends": 20, "pet": 5},
+        "occasion_bonuses": {"honeymoon": 5, "anniversary": 10, "birthday": 15, "vacation": 5, "workation": 15},
+        "best_months": [5, 6, 7, 8, 9],
+        "avoid_months": [1, 2, 12],
+        "best_seasons": ["Printemps", "Ete"],
+        "trending_score": 75,
+        "top_activities": [
+            {"name": "Vieille ville de Cracovie", "emoji": "european_castle", "category": "history"},
+            {"name": "Mines de sel Wieliczka", "emoji": "gem", "category": "culture"},
+            {"name": "Auschwitz memorial", "emoji": "candle", "category": "history"},
+            {"name": "Tatras randonnee", "emoji": "mountain", "category": "nature"},
+            {"name": "Varsovie nightlife", "emoji": "night_with_stars", "category": "nightlife"}
+        ],
+        "fallback_headlines": {
+            "solo": "Pologne, tresor cache de l'Europe",
+            "couple": "Cracovie romantique et histoire",
+            "family": "Pologne en famille, decouverte culturelle",
+            "friends": "Varsovie et Cracovie entre amis",
+            "pet": "Pologne avec votre compagnon"
+        },
+        "fallback_description": "Histoire fascinante, villes charmantes et excellent rapport qualite-prix."
+    },
+    {
+        "country_code": "HU",
+        "country_name": "Hongrie",
+        "flag_emoji": "HU",
+        "region": "Europe",
+        "subregion": "Eastern Europe",
+        "languages": ["Hungarian"],
+        "currency": "HUF",
+        "style_scores": {
+            "chill_vs_intense": 40,
+            "city_vs_nature": 60,
+            "eco_vs_luxury": 45,
+            "tourist_vs_local": 55
+        },
+        "interest_scores": {
+            "culture": 85, "food": 85, "beach": 30, "adventure": 45,
+            "nature": 60, "nightlife": 85, "history": 90, "art": 80,
+            "shopping": 70, "wellness": 95, "sports": 50
+        },
+        "must_haves": {
+            "accessibility_score": 70, "pet_friendly_score": 55,
+            "family_friendly_score": 75, "wifi_quality_score": 85
+        },
+        "budget": {
+            "cost_of_living_index": 50,
+            "budget_min_7d": 300, "budget_max_7d": 550,
+            "comfort_min_7d": 550, "comfort_max_7d": 1000,
+            "premium_min_7d": 1000, "premium_max_7d": 2000,
+            "luxury_min_7d": 2000, "luxury_max_7d": 4500
+        },
+        "travel_style_bonuses": {"solo": 15, "couple": 20, "family": 10, "friends": 20, "pet": 5},
+        "occasion_bonuses": {"honeymoon": 15, "anniversary": 15, "birthday": 15, "vacation": 5, "workation": 10},
+        "best_months": [4, 5, 6, 9, 10],
+        "avoid_months": [1, 2],
+        "best_seasons": ["Printemps", "Automne"],
+        "trending_score": 78,
+        "top_activities": [
+            {"name": "Bains thermaux Budapest", "emoji": "hot_springs", "category": "wellness"},
+            {"name": "Parlement de Budapest", "emoji": "classical_building", "category": "culture"},
+            {"name": "Ruin bars", "emoji": "tropical_drink", "category": "nightlife"},
+            {"name": "Croisiere sur le Danube", "emoji": "ship", "category": "culture"},
+            {"name": "Cuisine hongroise", "emoji": "plate_with_cutlery", "category": "food"}
+        ],
+        "fallback_headlines": {
+            "solo": "Budapest, perle du Danube",
+            "couple": "Budapest romantique et bains thermaux",
+            "family": "Hongrie en famille, culture accessible",
+            "friends": "Budapest festive entre amis",
+            "pet": "Hongrie avec votre compagnon"
+        },
+        "fallback_description": "Bains thermaux, architecture sublime et vie nocturne animee."
+    },
+    {
+        "country_code": "BE",
+        "country_name": "Belgique",
+        "flag_emoji": "BE",
+        "region": "Europe",
+        "subregion": "Western Europe",
+        "languages": ["French", "Dutch", "German"],
+        "currency": "EUR",
+        "style_scores": {
+            "chill_vs_intense": 35,
+            "city_vs_nature": 65,
+            "eco_vs_luxury": 50,
+            "tourist_vs_local": 55
+        },
+        "interest_scores": {
+            "culture": 90, "food": 95, "beach": 40, "adventure": 35,
+            "nature": 55, "nightlife": 75, "history": 90, "art": 95,
+            "shopping": 80, "wellness": 60, "sports": 50
+        },
+        "must_haves": {
+            "accessibility_score": 85, "pet_friendly_score": 70,
+            "family_friendly_score": 85, "wifi_quality_score": 90
+        },
+        "budget": {
+            "cost_of_living_index": 90,
+            "budget_min_7d": 450, "budget_max_7d": 750,
+            "comfort_min_7d": 750, "comfort_max_7d": 1400,
+            "premium_min_7d": 1400, "premium_max_7d": 2800,
+            "luxury_min_7d": 2800, "luxury_max_7d": 6000
+        },
+        "travel_style_bonuses": {"solo": 10, "couple": 20, "family": 15, "friends": 15, "pet": 10},
+        "occasion_bonuses": {"honeymoon": 10, "anniversary": 15, "birthday": 10, "vacation": 5, "workation": 10},
+        "best_months": [4, 5, 6, 9],
+        "avoid_months": [1, 2, 11, 12],
+        "best_seasons": ["Printemps", "Ete"],
+        "trending_score": 72,
+        "top_activities": [
+            {"name": "Chocolateries belges", "emoji": "chocolate_bar", "category": "food"},
+            {"name": "Grand-Place Bruxelles", "emoji": "european_castle", "category": "culture"},
+            {"name": "Canaux de Bruges", "emoji": "boat", "category": "culture"},
+            {"name": "Bieres belges", "emoji": "beer", "category": "food"},
+            {"name": "Musees d'art", "emoji": "art", "category": "art"}
+        ],
+        "fallback_headlines": {
+            "solo": "Belgique, art de vivre et chocolat",
+            "couple": "Bruges romantique et gastronomie",
+            "family": "Belgique en famille, accessible et gourmande",
+            "friends": "Biere et culture belge entre amis",
+            "pet": "Belgique avec votre compagnon"
+        },
+        "fallback_description": "Chocolat, bieres, architecture et art dans un pays compact."
+    },
+    {
+        "country_code": "IE",
+        "country_name": "Irlande",
+        "flag_emoji": "IE",
+        "region": "Europe",
+        "subregion": "Northern Europe",
+        "languages": ["English", "Irish"],
+        "currency": "EUR",
+        "style_scores": {
+            "chill_vs_intense": 35,
+            "city_vs_nature": 55,
+            "eco_vs_luxury": 40,
+            "tourist_vs_local": 65
+        },
+        "interest_scores": {
+            "culture": 90, "food": 75, "beach": 50, "adventure": 65,
+            "nature": 90, "nightlife": 85, "history": 90, "art": 75,
+            "shopping": 65, "wellness": 55, "sports": 60
+        },
+        "must_haves": {
+            "accessibility_score": 80, "pet_friendly_score": 75,
+            "family_friendly_score": 85, "wifi_quality_score": 85
+        },
+        "budget": {
+            "cost_of_living_index": 100,
+            "budget_min_7d": 500, "budget_max_7d": 850,
+            "comfort_min_7d": 850, "comfort_max_7d": 1600,
+            "premium_min_7d": 1600, "premium_max_7d": 3200,
+            "luxury_min_7d": 3200, "luxury_max_7d": 7000
+        },
+        "travel_style_bonuses": {"solo": 15, "couple": 15, "family": 15, "friends": 20, "pet": 10},
+        "occasion_bonuses": {"honeymoon": 15, "anniversary": 15, "birthday": 10, "vacation": 5, "workation": 10},
+        "best_months": [5, 6, 7, 8, 9],
+        "avoid_months": [11, 12, 1, 2],
+        "best_seasons": ["Printemps", "Ete"],
+        "trending_score": 75,
+        "top_activities": [
+            {"name": "Falaises de Moher", "emoji": "mountain", "category": "nature"},
+            {"name": "Pubs de Dublin", "emoji": "beer", "category": "nightlife"},
+            {"name": "Ring of Kerry", "emoji": "car", "category": "nature"},
+            {"name": "Chateau de Blarney", "emoji": "european_castle", "category": "history"},
+            {"name": "Musique traditionnelle", "emoji": "musical_note", "category": "culture"}
+        ],
+        "fallback_headlines": {
+            "solo": "Irlande, terre de legendes",
+            "couple": "Irlande romantique et paysages verts",
+            "family": "Irlande en famille, nature et histoire",
+            "friends": "Pubs et aventures irlandaises entre amis",
+            "pet": "Irlande avec votre compagnon"
+        },
+        "fallback_description": "Paysages verdoyants, pubs chaleureux et culture celtique authentique."
+    },
+    {
+        "country_code": "SE",
+        "country_name": "Suede",
+        "flag_emoji": "SE",
+        "region": "Europe",
+        "subregion": "Northern Europe",
+        "languages": ["Swedish"],
+        "currency": "SEK",
+        "style_scores": {
+            "chill_vs_intense": 40,
+            "city_vs_nature": 50,
+            "eco_vs_luxury": 45,
+            "tourist_vs_local": 55
+        },
+        "interest_scores": {
+            "culture": 85, "food": 80, "beach": 45, "adventure": 70,
+            "nature": 90, "nightlife": 75, "history": 80, "art": 85,
+            "shopping": 80, "wellness": 85, "sports": 70
+        },
+        "must_haves": {
+            "accessibility_score": 90, "pet_friendly_score": 80,
+            "family_friendly_score": 90, "wifi_quality_score": 95
+        },
+        "budget": {
+            "cost_of_living_index": 110,
+            "budget_min_7d": 600, "budget_max_7d": 1000,
+            "comfort_min_7d": 1000, "comfort_max_7d": 2000,
+            "premium_min_7d": 2000, "premium_max_7d": 4000,
+            "luxury_min_7d": 4000, "luxury_max_7d": 9000
+        },
+        "travel_style_bonuses": {"solo": 15, "couple": 15, "family": 20, "friends": 15, "pet": 15},
+        "occasion_bonuses": {"honeymoon": 15, "anniversary": 15, "birthday": 10, "vacation": 5, "workation": 20},
+        "best_months": [5, 6, 7, 8],
+        "avoid_months": [11, 12, 1, 2],
+        "best_seasons": ["Ete"],
+        "trending_score": 70,
+        "top_activities": [
+            {"name": "Stockholm archipel", "emoji": "island", "category": "nature"},
+            {"name": "Aurores boreales", "emoji": "sparkles", "category": "nature"},
+            {"name": "Design scandinave", "emoji": "art", "category": "shopping"},
+            {"name": "Fika tradition cafe", "emoji": "coffee", "category": "culture"},
+            {"name": "Musee ABBA", "emoji": "musical_note", "category": "culture"}
+        ],
+        "fallback_headlines": {
+            "solo": "Suede, design et nature nordique",
+            "couple": "Stockholm romantique et iles",
+            "family": "Suede en famille, qualite de vie",
+            "friends": "Aventure scandinave entre amis",
+            "pet": "Suede avec votre compagnon"
+        },
+        "fallback_description": "Design elegant, nature preservee et qualite de vie exceptionnelle."
+    },
+
+    # Asia additions
+    {
+        "country_code": "MY",
+        "country_name": "Malaisie",
+        "flag_emoji": "MY",
+        "region": "Asia",
+        "subregion": "South-Eastern Asia",
+        "languages": ["Malay", "English"],
+        "currency": "MYR",
+        "style_scores": {
+            "chill_vs_intense": 45,
+            "city_vs_nature": 55,
+            "eco_vs_luxury": 45,
+            "tourist_vs_local": 60
+        },
+        "interest_scores": {
+            "culture": 85, "food": 95, "beach": 85, "adventure": 75,
+            "nature": 90, "nightlife": 70, "history": 75, "art": 70,
+            "shopping": 85, "wellness": 75, "sports": 55
+        },
+        "must_haves": {
+            "accessibility_score": 65, "pet_friendly_score": 45,
+            "family_friendly_score": 80, "wifi_quality_score": 80
+        },
+        "budget": {
+            "cost_of_living_index": 40,
+            "budget_min_7d": 250, "budget_max_7d": 450,
+            "comfort_min_7d": 450, "comfort_max_7d": 900,
+            "premium_min_7d": 900, "premium_max_7d": 2000,
+            "luxury_min_7d": 2000, "luxury_max_7d": 5000
+        },
+        "travel_style_bonuses": {"solo": 15, "couple": 15, "family": 15, "friends": 15, "pet": -5},
+        "occasion_bonuses": {"honeymoon": 15, "anniversary": 15, "birthday": 10, "vacation": 5, "workation": 15},
+        "best_months": [3, 4, 5, 9, 10],
+        "avoid_months": [11, 12, 1],
+        "best_seasons": ["Printemps", "Automne"],
+        "trending_score": 78,
+        "top_activities": [
+            {"name": "Torres Petronas", "emoji": "cityscape", "category": "culture"},
+            {"name": "Street food Penang", "emoji": "plate_with_cutlery", "category": "food"},
+            {"name": "Plages Langkawi", "emoji": "beach", "category": "beach"},
+            {"name": "Jungle Borneo", "emoji": "deciduous_tree", "category": "nature"},
+            {"name": "Grottes Batu", "emoji": "mountain", "category": "culture"}
+        ],
+        "fallback_headlines": {
+            "solo": "Malaisie, diversite culturelle",
+            "couple": "Langkawi romantique et Kuala Lumpur",
+            "family": "Malaisie en famille, aventure accessible",
+            "friends": "Aventure malaisienne entre amis",
+            "pet": "Malaisie avec votre compagnon"
+        },
+        "fallback_description": "Melange unique de cultures, street food legendaire et nature tropicale."
+    },
+    {
+        "country_code": "PH",
+        "country_name": "Philippines",
+        "flag_emoji": "PH",
+        "region": "Asia",
+        "subregion": "South-Eastern Asia",
+        "languages": ["Filipino", "English"],
+        "currency": "PHP",
+        "style_scores": {
+            "chill_vs_intense": 40,
+            "city_vs_nature": 65,
+            "eco_vs_luxury": 40,
+            "tourist_vs_local": 55
+        },
+        "interest_scores": {
+            "culture": 75, "food": 80, "beach": 98, "adventure": 85,
+            "nature": 90, "nightlife": 70, "history": 65, "art": 60,
+            "shopping": 70, "wellness": 70, "sports": 75
+        },
+        "must_haves": {
+            "accessibility_score": 45, "pet_friendly_score": 40,
+            "family_friendly_score": 75, "wifi_quality_score": 65
+        },
+        "budget": {
+            "cost_of_living_index": 35,
+            "budget_min_7d": 200, "budget_max_7d": 400,
+            "comfort_min_7d": 400, "comfort_max_7d": 800,
+            "premium_min_7d": 800, "premium_max_7d": 1800,
+            "luxury_min_7d": 1800, "luxury_max_7d": 4500
+        },
+        "travel_style_bonuses": {"solo": 15, "couple": 20, "family": 10, "friends": 20, "pet": -10},
+        "occasion_bonuses": {"honeymoon": 25, "anniversary": 20, "birthday": 15, "vacation": 5, "workation": 10},
+        "best_months": [1, 2, 3, 4, 5],
+        "avoid_months": [7, 8, 9, 10],
+        "best_seasons": ["Hiver", "Printemps"],
+        "trending_score": 82,
+        "top_activities": [
+            {"name": "Palawan El Nido", "emoji": "beach", "category": "beach"},
+            {"name": "Collines chocolat Bohol", "emoji": "mountain", "category": "nature"},
+            {"name": "Plongee Cebu", "emoji": "fish", "category": "adventure"},
+            {"name": "Rizicultures Banaue", "emoji": "rice", "category": "nature"},
+            {"name": "Island hopping", "emoji": "boat", "category": "adventure"}
+        ],
+        "fallback_headlines": {
+            "solo": "Philippines, 7000 iles paradisiaques",
+            "couple": "Palawan romantique et plages secretes",
+            "family": "Philippines en famille, iles accessibles",
+            "friends": "Island hopping entre amis",
+            "pet": "Philippines avec votre compagnon"
+        },
+        "fallback_description": "Plages de reve, island hopping et hospitalite legendaire."
+    },
+    {
+        "country_code": "LK",
+        "country_name": "Sri Lanka",
+        "flag_emoji": "LK",
+        "region": "Asia",
+        "subregion": "Southern Asia",
+        "languages": ["Sinhala", "Tamil", "English"],
+        "currency": "LKR",
+        "style_scores": {
+            "chill_vs_intense": 40,
+            "city_vs_nature": 60,
+            "eco_vs_luxury": 40,
+            "tourist_vs_local": 55
+        },
+        "interest_scores": {
+            "culture": 90, "food": 85, "beach": 85, "adventure": 80,
+            "nature": 95, "nightlife": 45, "history": 90, "art": 70,
+            "shopping": 65, "wellness": 90, "sports": 60
+        },
+        "must_haves": {
+            "accessibility_score": 45, "pet_friendly_score": 40,
+            "family_friendly_score": 75, "wifi_quality_score": 65
+        },
+        "budget": {
+            "cost_of_living_index": 30,
+            "budget_min_7d": 200, "budget_max_7d": 400,
+            "comfort_min_7d": 400, "comfort_max_7d": 800,
+            "premium_min_7d": 800, "premium_max_7d": 1800,
+            "luxury_min_7d": 1800, "luxury_max_7d": 4500
+        },
+        "travel_style_bonuses": {"solo": 15, "couple": 20, "family": 10, "friends": 15, "pet": -10},
+        "occasion_bonuses": {"honeymoon": 20, "anniversary": 20, "birthday": 10, "vacation": 5, "workation": 10},
+        "best_months": [1, 2, 3, 4],
+        "avoid_months": [5, 6, 10, 11],
+        "best_seasons": ["Hiver"],
+        "trending_score": 80,
+        "top_activities": [
+            {"name": "Train des montagnes", "emoji": "train", "category": "nature"},
+            {"name": "Temples de Sigiriya", "emoji": "shinto_shrine", "category": "history"},
+            {"name": "Safari Yala", "emoji": "elephant", "category": "nature"},
+            {"name": "Plages du sud", "emoji": "beach", "category": "beach"},
+            {"name": "Ayurveda", "emoji": "lotus", "category": "wellness"}
+        ],
+        "fallback_headlines": {
+            "solo": "Sri Lanka, ile aux tresors",
+            "couple": "Sri Lanka romantique, nature et temples",
+            "family": "Sri Lanka en famille, aventure douce",
+            "friends": "Safari et plages entre amis",
+            "pet": "Sri Lanka avec votre compagnon"
+        },
+        "fallback_description": "Temples anciens, plages dorees, safaris et ayurveda authentique."
+    },
+    {
+        "country_code": "KH",
+        "country_name": "Cambodge",
+        "flag_emoji": "KH",
+        "region": "Asia",
+        "subregion": "South-Eastern Asia",
+        "languages": ["Khmer"],
+        "currency": "KHR",
+        "style_scores": {
+            "chill_vs_intense": 45,
+            "city_vs_nature": 55,
+            "eco_vs_luxury": 35,
+            "tourist_vs_local": 60
+        },
+        "interest_scores": {
+            "culture": 95, "food": 80, "beach": 70, "adventure": 70,
+            "nature": 75, "nightlife": 65, "history": 98, "art": 75,
+            "shopping": 60, "wellness": 65, "sports": 45
+        },
+        "must_haves": {
+            "accessibility_score": 40, "pet_friendly_score": 35,
+            "family_friendly_score": 65, "wifi_quality_score": 60
+        },
+        "budget": {
+            "cost_of_living_index": 28,
+            "budget_min_7d": 180, "budget_max_7d": 350,
+            "comfort_min_7d": 350, "comfort_max_7d": 700,
+            "premium_min_7d": 700, "premium_max_7d": 1500,
+            "luxury_min_7d": 1500, "luxury_max_7d": 4000
+        },
+        "travel_style_bonuses": {"solo": 20, "couple": 15, "family": 5, "friends": 15, "pet": -15},
+        "occasion_bonuses": {"honeymoon": 10, "anniversary": 10, "birthday": 10, "vacation": 5, "workation": 5},
+        "best_months": [11, 12, 1, 2, 3],
+        "avoid_months": [5, 6, 7, 8, 9],
+        "best_seasons": ["Hiver"],
+        "trending_score": 75,
+        "top_activities": [
+            {"name": "Angkor Wat", "emoji": "shinto_shrine", "category": "history"},
+            {"name": "Temples de Siem Reap", "emoji": "classical_building", "category": "culture"},
+            {"name": "Phnom Penh", "emoji": "cityscape", "category": "culture"},
+            {"name": "Plages de Sihanoukville", "emoji": "beach", "category": "beach"},
+            {"name": "Cuisine khmere", "emoji": "plate_with_cutlery", "category": "food"}
+        ],
+        "fallback_headlines": {
+            "solo": "Cambodge, temples millenaires",
+            "couple": "Angkor romantique et mystique",
+            "family": "Cambodge en famille, histoire vivante",
+            "friends": "Temples et aventures entre amis",
+            "pet": "Cambodge avec votre compagnon"
+        },
+        "fallback_description": "Temples d'Angkor, histoire khmere et authenticite preservee."
+    },
+    {
+        "country_code": "NP",
+        "country_name": "Nepal",
+        "flag_emoji": "NP",
+        "region": "Asia",
+        "subregion": "Southern Asia",
+        "languages": ["Nepali"],
+        "currency": "NPR",
+        "style_scores": {
+            "chill_vs_intense": 65,
+            "city_vs_nature": 80,
+            "eco_vs_luxury": 30,
+            "tourist_vs_local": 70
+        },
+        "interest_scores": {
+            "culture": 90, "food": 75, "beach": 0, "adventure": 98,
+            "nature": 100, "nightlife": 40, "history": 85, "art": 70,
+            "shopping": 55, "wellness": 80, "sports": 85
+        },
+        "must_haves": {
+            "accessibility_score": 25, "pet_friendly_score": 30,
+            "family_friendly_score": 50, "wifi_quality_score": 50
+        },
+        "budget": {
+            "cost_of_living_index": 25,
+            "budget_min_7d": 150, "budget_max_7d": 300,
+            "comfort_min_7d": 300, "comfort_max_7d": 600,
+            "premium_min_7d": 600, "premium_max_7d": 1500,
+            "luxury_min_7d": 1500, "luxury_max_7d": 4000
+        },
+        "travel_style_bonuses": {"solo": 25, "couple": 15, "family": 0, "friends": 20, "pet": -20},
+        "occasion_bonuses": {"honeymoon": 10, "anniversary": 10, "birthday": 15, "vacation": 5, "workation": 5},
+        "best_months": [3, 4, 5, 10, 11],
+        "avoid_months": [6, 7, 8],
+        "best_seasons": ["Printemps", "Automne"],
+        "trending_score": 72,
+        "top_activities": [
+            {"name": "Trek Everest Base Camp", "emoji": "mountain", "category": "adventure"},
+            {"name": "Temples Katmandou", "emoji": "shinto_shrine", "category": "culture"},
+            {"name": "Annapurna Circuit", "emoji": "hiking", "category": "adventure"},
+            {"name": "Safari Chitwan", "emoji": "elephant", "category": "nature"},
+            {"name": "Yoga et meditation", "emoji": "lotus", "category": "wellness"}
+        ],
+        "fallback_headlines": {
+            "solo": "Nepal, toit du monde",
+            "couple": "Himalaya romantique et spirituel",
+            "family": "Nepal en famille, aventure moderee",
+            "friends": "Trek et aventures entre amis",
+            "pet": "Nepal avec votre compagnon"
+        },
+        "fallback_description": "Himalayas majestueuses, spiritualite et aventure au sommet du monde."
+    },
+
+    # Americas additions
+    {
+        "country_code": "CA",
+        "country_name": "Canada",
+        "flag_emoji": "CA",
+        "region": "Americas",
+        "subregion": "Northern America",
+        "languages": ["English", "French"],
+        "currency": "CAD",
+        "style_scores": {
+            "chill_vs_intense": 45,
+            "city_vs_nature": 55,
+            "eco_vs_luxury": 50,
+            "tourist_vs_local": 55
+        },
+        "interest_scores": {
+            "culture": 85, "food": 80, "beach": 45, "adventure": 90,
+            "nature": 98, "nightlife": 75, "history": 70, "art": 80,
+            "shopping": 80, "wellness": 80, "sports": 85
+        },
+        "must_haves": {
+            "accessibility_score": 90, "pet_friendly_score": 85,
+            "family_friendly_score": 95, "wifi_quality_score": 90
+        },
+        "budget": {
+            "cost_of_living_index": 95,
+            "budget_min_7d": 600, "budget_max_7d": 1000,
+            "comfort_min_7d": 1000, "comfort_max_7d": 2000,
+            "premium_min_7d": 2000, "premium_max_7d": 4000,
+            "luxury_min_7d": 4000, "luxury_max_7d": 10000
+        },
+        "travel_style_bonuses": {"solo": 15, "couple": 15, "family": 25, "friends": 20, "pet": 15},
+        "occasion_bonuses": {"honeymoon": 15, "anniversary": 15, "birthday": 10, "vacation": 10, "workation": 15},
+        "best_months": [6, 7, 8, 9],
+        "avoid_months": [12, 1, 2],
+        "best_seasons": ["Ete", "Automne"],
+        "trending_score": 82,
+        "top_activities": [
+            {"name": "Rocheuses canadiennes", "emoji": "mountain", "category": "nature"},
+            {"name": "Chutes Niagara", "emoji": "droplet", "category": "nature"},
+            {"name": "Vancouver outdoor", "emoji": "evergreen_tree", "category": "adventure"},
+            {"name": "Quebec historique", "emoji": "european_castle", "category": "history"},
+            {"name": "Aurores boreales Yukon", "emoji": "sparkles", "category": "nature"}
+        ],
+        "fallback_headlines": {
+            "solo": "Canada, grands espaces sauvages",
+            "couple": "Canada romantique, nature grandiose",
+            "family": "Canada en famille, aventure securisee",
+            "friends": "Road trip canadien entre amis",
+            "pet": "Canada avec votre compagnon"
+        },
+        "fallback_description": "Nature spectaculaire, villes cosmopolites et hospitalite legendaire."
+    },
+    {
+        "country_code": "AR",
+        "country_name": "Argentine",
+        "flag_emoji": "AR",
+        "region": "Americas",
+        "subregion": "South America",
+        "languages": ["Spanish"],
+        "currency": "ARS",
+        "style_scores": {
+            "chill_vs_intense": 50,
+            "city_vs_nature": 55,
+            "eco_vs_luxury": 45,
+            "tourist_vs_local": 60
+        },
+        "interest_scores": {
+            "culture": 90, "food": 90, "beach": 55, "adventure": 85,
+            "nature": 95, "nightlife": 90, "history": 80, "art": 85,
+            "shopping": 75, "wellness": 70, "sports": 85
+        },
+        "must_haves": {
+            "accessibility_score": 55, "pet_friendly_score": 60,
+            "family_friendly_score": 75, "wifi_quality_score": 75
+        },
+        "budget": {
+            "cost_of_living_index": 45,
+            "budget_min_7d": 350, "budget_max_7d": 600,
+            "comfort_min_7d": 600, "comfort_max_7d": 1200,
+            "premium_min_7d": 1200, "premium_max_7d": 2500,
+            "luxury_min_7d": 2500, "luxury_max_7d": 6000
+        },
+        "travel_style_bonuses": {"solo": 15, "couple": 25, "family": 10, "friends": 20, "pet": 5},
+        "occasion_bonuses": {"honeymoon": 20, "anniversary": 20, "birthday": 15, "vacation": 5, "workation": 10},
+        "best_months": [10, 11, 12, 3, 4],
+        "avoid_months": [6, 7],
+        "best_seasons": ["Printemps", "Automne"],
+        "trending_score": 78,
+        "top_activities": [
+            {"name": "Tango Buenos Aires", "emoji": "dancer", "category": "culture"},
+            {"name": "Glacier Perito Moreno", "emoji": "ice_cube", "category": "nature"},
+            {"name": "Vignobles Mendoza", "emoji": "wine_glass", "category": "food"},
+            {"name": "Chutes Iguazu", "emoji": "droplet", "category": "nature"},
+            {"name": "Patagonie", "emoji": "mountain", "category": "adventure"}
+        ],
+        "fallback_headlines": {
+            "solo": "Argentine, passion et grands espaces",
+            "couple": "Buenos Aires romantique et Patagonie",
+            "family": "Argentine en famille, diversite naturelle",
+            "friends": "Tango et vin entre amis",
+            "pet": "Argentine avec votre compagnon"
+        },
+        "fallback_description": "Tango passionnel, vins exceptionnels et paysages patagoniens epoustouflants."
+    },
+    {
+        "country_code": "CL",
+        "country_name": "Chili",
+        "flag_emoji": "CL",
+        "region": "Americas",
+        "subregion": "South America",
+        "languages": ["Spanish"],
+        "currency": "CLP",
+        "style_scores": {
+            "chill_vs_intense": 55,
+            "city_vs_nature": 70,
+            "eco_vs_luxury": 45,
+            "tourist_vs_local": 55
+        },
+        "interest_scores": {
+            "culture": 80, "food": 85, "beach": 55, "adventure": 95,
+            "nature": 98, "nightlife": 70, "history": 75, "art": 75,
+            "shopping": 65, "wellness": 70, "sports": 80
+        },
+        "must_haves": {
+            "accessibility_score": 60, "pet_friendly_score": 55,
+            "family_friendly_score": 75, "wifi_quality_score": 80
+        },
+        "budget": {
+            "cost_of_living_index": 60,
+            "budget_min_7d": 400, "budget_max_7d": 700,
+            "comfort_min_7d": 700, "comfort_max_7d": 1400,
+            "premium_min_7d": 1400, "premium_max_7d": 3000,
+            "luxury_min_7d": 3000, "luxury_max_7d": 7000
+        },
+        "travel_style_bonuses": {"solo": 20, "couple": 15, "family": 10, "friends": 20, "pet": 0},
+        "occasion_bonuses": {"honeymoon": 15, "anniversary": 15, "birthday": 10, "vacation": 5, "workation": 10},
+        "best_months": [10, 11, 12, 1, 2, 3],
+        "avoid_months": [6, 7],
+        "best_seasons": ["Printemps", "Ete"],
+        "trending_score": 75,
+        "top_activities": [
+            {"name": "Torres del Paine", "emoji": "mountain", "category": "nature"},
+            {"name": "Ile de Paques", "emoji": "moyai", "category": "history"},
+            {"name": "Atacama desert", "emoji": "desert", "category": "nature"},
+            {"name": "Vallee viticole", "emoji": "wine_glass", "category": "food"},
+            {"name": "Santiago moderne", "emoji": "cityscape", "category": "culture"}
+        ],
+        "fallback_headlines": {
+            "solo": "Chili, terre des extremes",
+            "couple": "Chili romantique, desert aux glaciers",
+            "family": "Chili en famille, aventure nature",
+            "friends": "Patagonie chilienne entre amis",
+            "pet": "Chili avec votre compagnon"
+        },
+        "fallback_description": "Du desert d'Atacama aux glaciers de Patagonie, nature a l'etat brut."
+    },
+
+    # Africa additions
+    {
+        "country_code": "TZ",
+        "country_name": "Tanzanie",
+        "flag_emoji": "TZ",
+        "region": "Africa",
+        "subregion": "Eastern Africa",
+        "languages": ["Swahili", "English"],
+        "currency": "TZS",
+        "style_scores": {
+            "chill_vs_intense": 50,
+            "city_vs_nature": 85,
+            "eco_vs_luxury": 50,
+            "tourist_vs_local": 60
+        },
+        "interest_scores": {
+            "culture": 75, "food": 65, "beach": 90, "adventure": 95,
+            "nature": 100, "nightlife": 40, "history": 60, "art": 55,
+            "shopping": 50, "wellness": 65, "sports": 70
+        },
+        "must_haves": {
+            "accessibility_score": 35, "pet_friendly_score": 25,
+            "family_friendly_score": 60, "wifi_quality_score": 50
+        },
+        "budget": {
+            "cost_of_living_index": 45,
+            "budget_min_7d": 600, "budget_max_7d": 1200,
+            "comfort_min_7d": 1200, "comfort_max_7d": 2500,
+            "premium_min_7d": 2500, "premium_max_7d": 5000,
+            "luxury_min_7d": 5000, "luxury_max_7d": 15000
+        },
+        "travel_style_bonuses": {"solo": 10, "couple": 25, "family": 15, "friends": 15, "pet": -20},
+        "occasion_bonuses": {"honeymoon": 25, "anniversary": 25, "birthday": 15, "vacation": 5, "workation": 0},
+        "best_months": [6, 7, 8, 9, 10, 1, 2],
+        "avoid_months": [3, 4, 5, 11],
+        "best_seasons": ["Ete", "Hiver"],
+        "trending_score": 82,
+        "top_activities": [
+            {"name": "Safari Serengeti", "emoji": "lion", "category": "nature"},
+            {"name": "Cratere Ngorongoro", "emoji": "volcano", "category": "nature"},
+            {"name": "Zanzibar plages", "emoji": "beach", "category": "beach"},
+            {"name": "Kilimandjaro trek", "emoji": "mountain", "category": "adventure"},
+            {"name": "Migration gnous", "emoji": "water_buffalo", "category": "nature"}
+        ],
+        "fallback_headlines": {
+            "solo": "Tanzanie, safari au coeur de l'Afrique",
+            "couple": "Serengeti romantique et Zanzibar",
+            "family": "Tanzanie en famille, safari adapte",
+            "friends": "Aventure safari entre amis",
+            "pet": "Tanzanie avec votre compagnon"
+        },
+        "fallback_description": "Safari mythique au Serengeti, Kilimandjaro et plages de Zanzibar."
+    },
+    {
+        "country_code": "TN",
+        "country_name": "Tunisie",
+        "flag_emoji": "TN",
+        "region": "Africa",
+        "subregion": "Northern Africa",
+        "languages": ["Arabic", "French"],
+        "currency": "TND",
+        "style_scores": {
+            "chill_vs_intense": 40,
+            "city_vs_nature": 50,
+            "eco_vs_luxury": 40,
+            "tourist_vs_local": 55
+        },
+        "interest_scores": {
+            "culture": 85, "food": 85, "beach": 85, "adventure": 65,
+            "nature": 65, "nightlife": 60, "history": 95, "art": 75,
+            "shopping": 80, "wellness": 85, "sports": 55
+        },
+        "must_haves": {
+            "accessibility_score": 50, "pet_friendly_score": 40,
+            "family_friendly_score": 80, "wifi_quality_score": 70
+        },
+        "budget": {
+            "cost_of_living_index": 35,
+            "budget_min_7d": 250, "budget_max_7d": 450,
+            "comfort_min_7d": 450, "comfort_max_7d": 900,
+            "premium_min_7d": 900, "premium_max_7d": 2000,
+            "luxury_min_7d": 2000, "luxury_max_7d": 5000
+        },
+        "travel_style_bonuses": {"solo": 10, "couple": 20, "family": 20, "friends": 15, "pet": -5},
+        "occasion_bonuses": {"honeymoon": 15, "anniversary": 15, "birthday": 10, "vacation": 10, "workation": 5},
+        "best_months": [4, 5, 6, 9, 10],
+        "avoid_months": [7, 8],
+        "best_seasons": ["Printemps", "Automne"],
+        "trending_score": 68,
+        "top_activities": [
+            {"name": "Medina Tunis", "emoji": "mosque", "category": "culture"},
+            {"name": "Ruines Carthage", "emoji": "classical_building", "category": "history"},
+            {"name": "Plages Djerba", "emoji": "beach", "category": "beach"},
+            {"name": "Sahara excursion", "emoji": "camel", "category": "adventure"},
+            {"name": "Thalasso", "emoji": "hot_springs", "category": "wellness"}
+        ],
+        "fallback_headlines": {
+            "solo": "Tunisie, mediterranee authentique",
+            "couple": "Tunisie romantique, plages et histoire",
+            "family": "Tunisie en famille, soleil accessible",
+            "friends": "Aventure tunisienne entre amis",
+            "pet": "Tunisie avec votre compagnon"
+        },
+        "fallback_description": "Heritage romain, plages mediterraneennes et hospitalite tunisienne."
     },
 ]
 

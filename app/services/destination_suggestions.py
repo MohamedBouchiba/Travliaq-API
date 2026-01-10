@@ -81,6 +81,7 @@ class DestinationSuggestionService:
         preferences: UserPreferencesPayload,
         limit: int = 3,
         force_refresh: bool = False,
+        fast_mode: bool = False,
     ) -> DestinationSuggestionsResponse:
         """
         Generate personalized destination suggestions.
@@ -109,7 +110,7 @@ class DestinationSuggestionService:
 
         # Check cache
         if not force_refresh:
-            cached = await self.cache.get("dest_suggest", {"key": cache_key})
+            cached = self.cache.get("dest_suggest", {"key": cache_key})
             if cached:
                 logger.info("Cache HIT for destination suggestions")
                 return DestinationSuggestionsResponse(**cached)
@@ -147,10 +148,11 @@ class DestinationSuggestionService:
             f"Top {len(top_countries)} countries: {[c['profile'].get('country_code', '??') for c in top_countries]}"
         )
 
-        # Generate LLM content for top destinations
+        # Generate LLM content for top destinations (skip if fast_mode)
         suggestions = []
+        llm_map = {}
 
-        if self.llm and top_countries:
+        if not fast_mode and self.llm and top_countries:
             # Prepare data for batch LLM generation
             llm_input = [
                 {
@@ -175,20 +177,31 @@ class DestinationSuggestionService:
             except Exception as e:
                 logger.error(f"LLM batch generation failed: {e}")
                 llm_map = {}
-        else:
-            llm_map = {}
+        elif fast_mode:
+            logger.debug("Fast mode enabled - using pre-computed headlines")
 
         # Build suggestion objects
         for country_data in top_countries:
             profile = country_data["profile"]
             country_code = profile.get("country_code", "")
 
-            # Get LLM content or use fallback
+            # Get LLM content or use fallback (pre-computed headlines if available)
             if country_code in llm_map:
                 headline, description = llm_map[country_code]
             else:
-                headline = f"{profile.get('country_name', 'Unknown')}, le choix ideal"
-                description = f"Parfait pour votre voyage {preferences.travelStyle.value}."
+                # Try to use pre-computed fallback headlines from profile
+                fallback_headlines = profile.get("fallback_headlines", {})
+                travel_style = preferences.travelStyle.value
+
+                if travel_style in fallback_headlines:
+                    headline = fallback_headlines[travel_style]
+                else:
+                    headline = f"{profile.get('country_name', 'Unknown')}, le choix ideal"
+
+                description = profile.get(
+                    "fallback_description",
+                    f"Parfait pour votre voyage {travel_style}."
+                )
 
             # Get budget for user's level
             budget_data = profile.get("budget", {})
@@ -239,7 +252,7 @@ class DestinationSuggestionService:
 
         # Cache response
         try:
-            await self.cache.set(
+            self.cache.set(
                 "dest_suggest",
                 {"key": cache_key},
                 response.model_dump(),
