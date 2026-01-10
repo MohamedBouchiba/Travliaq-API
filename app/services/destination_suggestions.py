@@ -203,17 +203,18 @@ class DestinationSuggestionService:
                     f"Parfait pour votre voyage {travel_style}."
                 )
 
-            # Get budget for user's level (converted to per-day)
+            # Get budget for user's level (converted to per-day with 40% reduction)
             budget_data = profile.get("budget", {})
             budget_level = preferences.budgetLevel.value
             
-            # Convert 7-day budget to daily budget
+            # Convert 7-day budget to daily budget with realistic adjustment
             min_7d = budget_data.get(f"{budget_level}_min_7d", 500)
             max_7d = budget_data.get(f"{budget_level}_max_7d", 1500)
+            BUDGET_ADJUSTMENT = 0.6  # 40% reduction for realistic estimates
 
             budget_estimate = BudgetEstimate(
-                min=round(min_7d / 7),
-                max=round(max_7d / 7),
+                min=round((min_7d / 7) * BUDGET_ADJUSTMENT),
+                max=round((max_7d / 7) * BUDGET_ADJUSTMENT),
                 duration="per_day",
             )
 
