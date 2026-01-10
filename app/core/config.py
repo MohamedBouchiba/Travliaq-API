@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     mongodb_collection_geocoding_cache: str = Field("geocoding_cache", alias="MONGODB_COLLECTION_GEOCODING_CACHE")
     mongodb_collection_booking_destinations: str = Field("booking_destinations", alias="MONGODB_COLLECTION_BOOKING_DESTINATIONS")
     mongodb_collection_hotels_static: str = Field("hotels_static", alias="MONGODB_COLLECTION_HOTELS_STATIC")
+    mongodb_collection_country_profiles: str = Field("country_profiles", alias="MONGODB_COLLECTION_COUNTRY_PROFILES")
 
     # PostgreSQL/Supabase (optional - for autocomplete feature)
     pg_host: str | None = Field(None, alias="PG_HOST")
@@ -63,6 +64,16 @@ class Settings(BaseSettings):
         """Check if Booking.com integration is enabled."""
         return bool(self.rapidapi_key)
 
+    # OpenAI API (for LLM content generation)
+    openai_api_key: str = Field("", alias="OPENAI_API_KEY")
+    openai_model: str = Field("gpt-4o-mini", alias="OPENAI_MODEL")
+    openai_max_tokens: int = Field(300, alias="OPENAI_MAX_TOKENS")
+
+    @property
+    def llm_enabled(self) -> bool:
+        """Check if LLM integration is enabled."""
+        return bool(self.openai_api_key)
+
     # Upstash Redis (for flights cache)
     upstash_redis_rest_url: str = Field(..., alias="UPSTASH_REDIS_REST_URL")
     upstash_redis_rest_token: str = Field(..., alias="UPSTASH_REDIS_REST_TOKEN")
@@ -85,6 +96,9 @@ class Settings(BaseSettings):
     cache_ttl_hotel_search: int = Field(7200, description="2 hours - Hotel search results")
     cache_ttl_hotel_details: int = Field(604800, description="7 days - Hotel details (static data)")
     cache_ttl_hotel_map_prices: int = Field(86400, description="24 hours - Map prices (indicative only)")
+
+    # Destination suggestions cache TTL
+    cache_ttl_destination_suggestions: int = Field(3600, description="1 hour - Destination suggestions")
 
     # Feature Flags
     enable_geocoding: bool = Field(False, description="Enable LEVEL 3 geocoding enrichment (Geoapify + Google Places)", alias="ENABLE_GEOCODING")

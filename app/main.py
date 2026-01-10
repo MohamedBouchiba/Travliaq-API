@@ -50,6 +50,9 @@ from app.repositories.geocoding_cache_repository import GeocodingCacheRepository
 from app.repositories.hotels_repository import HotelsRepository
 from app.services.booking.client import BookingClient
 from app.services.booking.hotels_service import HotelsService
+from app.repositories.country_profiles_repository import CountryProfilesRepository
+from app.services.llm.openai_client import OpenAIClient
+from app.services.destination_suggestions import DestinationSuggestionService
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
@@ -246,6 +249,34 @@ async def startup_event() -> None:
         app.state.hotels_repo = None
         app.state.hotels_service = None
         logger.info("Hotels service not configured (RAPIDAPI_KEY not set)")
+
+    # Initialize Destination Suggestions service
+    mongo_db = app.state.mongo_manager.client[settings.mongodb_db]
+    country_profiles_collection = mongo_db[settings.mongodb_collection_country_profiles]
+    app.state.country_profiles_repo = CountryProfilesRepository(country_profiles_collection)
+    await app.state.country_profiles_repo.create_indexes()
+
+    # Initialize OpenAI LLM client (optional)
+    if settings.llm_enabled:
+        app.state.openai_client = OpenAIClient(
+            api_key=settings.openai_api_key,
+            http_client=app.state.http_client,
+            model=settings.openai_model,
+            max_tokens=settings.openai_max_tokens
+        )
+        logger.info(f"OpenAI LLM client initialized with model: {settings.openai_model}")
+    else:
+        app.state.openai_client = None
+        logger.info("OpenAI LLM not configured - destination suggestions will use fallback content")
+
+    # Initialize destination suggestions service
+    app.state.destination_suggestions_service = DestinationSuggestionService(
+        profiles_repo=app.state.country_profiles_repo,
+        llm_client=app.state.openai_client,
+        redis_cache=app.state.redis_cache,
+        cache_ttl=settings.cache_ttl_destination_suggestions
+    )
+    logger.info("Destination suggestions service initialized")
 
 
 @app.on_event("shutdown")
