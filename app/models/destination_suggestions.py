@@ -140,12 +140,12 @@ class UserPreferencesPayload(BaseModel):
 
 
 class BudgetEstimate(BaseModel):
-    """Budget estimate per person for 7 days."""
+    """Budget estimate per person per day."""
 
-    min: int = Field(..., ge=0, description="Minimum budget in EUR")
-    max: int = Field(..., ge=0, description="Maximum budget in EUR")
+    min: int = Field(..., ge=0, description="Minimum budget in EUR per day")
+    max: int = Field(..., ge=0, description="Maximum budget in EUR per day")
     currency: Literal["EUR"] = "EUR"
-    duration: Literal["7_days"] = "7_days"
+    duration: Literal["per_day", "7_days"] = "per_day"
 
 
 class TopActivity(BaseModel):

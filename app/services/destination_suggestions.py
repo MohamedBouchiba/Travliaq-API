@@ -203,13 +203,18 @@ class DestinationSuggestionService:
                     f"Parfait pour votre voyage {travel_style}."
                 )
 
-            # Get budget for user's level
+            # Get budget for user's level (converted to per-day)
             budget_data = profile.get("budget", {})
             budget_level = preferences.budgetLevel.value
+            
+            # Convert 7-day budget to daily budget
+            min_7d = budget_data.get(f"{budget_level}_min_7d", 500)
+            max_7d = budget_data.get(f"{budget_level}_max_7d", 1500)
 
             budget_estimate = BudgetEstimate(
-                min=budget_data.get(f"{budget_level}_min_7d", 500),
-                max=budget_data.get(f"{budget_level}_max_7d", 1500),
+                min=round(min_7d / 7),
+                max=round(max_7d / 7),
+                duration="per_day",
             )
 
             # Map top activities
