@@ -728,7 +728,7 @@ class FlightPriceCacheService:
         destination_country_codes: list[str],
         destination_profiles: dict[str, dict],
         currency: str = "EUR",
-    ) -> dict[str, tuple[int, PriceSource]]:
+    ) -> tuple[dict[str, tuple[int, PriceSource]], str | None]:
         """
         Get flight prices for multiple destinations with guaranteed results.
 
@@ -739,7 +739,9 @@ class FlightPriceCacheService:
             currency: Currency for prices (default: EUR)
 
         Returns:
-            Dict mapping country codes to (price, source) tuples
+            Tuple of:
+            - Dict mapping country codes to (price, source) tuples
+            - Origin airport IATA code used for price estimation (or None)
         """
         results: dict[str, tuple[int, PriceSource]] = {}
 
@@ -817,7 +819,7 @@ class FlightPriceCacheService:
                 )
                 results[country_code] = (estimated, "estimated")
 
-        return results
+        return results, origin_iata
 
     def _estimate_price_by_distance(
         self,

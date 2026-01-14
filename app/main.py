@@ -293,7 +293,6 @@ async def startup_event() -> None:
         redis_cache=app.state.redis_cache,
         cache_ttl=settings.cache_ttl_destination_suggestions,
         flight_price_cache=app.state.flight_price_cache,
-        airports_service=app.state.airports_service,
     )
     logger.info("Destination suggestions service initialized")
 
