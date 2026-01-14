@@ -42,6 +42,11 @@ COUNTRY_MAIN_AIRPORTS = {
     "NO": "OSL",  # Norway - Oslo
     "FI": "HEL",  # Finland - Helsinki
     "RO": "OTP",  # Romania - Bucharest
+    "SK": "BTS",  # Slovakia - Bratislava
+    "SI": "LJU",  # Slovenia - Ljubljana
+    "BA": "SJJ",  # Bosnia-Herzegovina - Sarajevo
+    "LU": "LUX",  # Luxembourg
+    "LV": "RIX",  # Latvia - Riga
     # Asia
     "TH": "BKK",  # Thailand - Bangkok Suvarnabhumi
     "VN": "SGN",  # Vietnam - Ho Chi Minh City
@@ -60,6 +65,15 @@ COUNTRY_MAIN_AIRPORTS = {
     "TR": "IST",  # Turkey - Istanbul
     "IL": "TLV",  # Israel - Tel Aviv
     "JO": "AMM",  # Jordan - Amman
+    "TW": "TPE",  # Taiwan - Taipei
+    "LA": "VTE",  # Laos - Vientiane
+    "MM": "RGN",  # Myanmar - Yangon
+    "UZ": "TAS",  # Uzbekistan - Tashkent
+    "KZ": "NQZ",  # Kazakhstan - Nursultan (Astana)
+    "SA": "RUH",  # Saudi Arabia - Riyadh
+    "OM": "MCT",  # Oman - Muscat
+    "QA": "DOH",  # Qatar - Doha
+    "BH": "BAH",  # Bahrain
     # Americas
     "US": "JFK",  # USA - New York JFK
     "CA": "YYZ",  # Canada - Toronto
@@ -74,6 +88,12 @@ COUNTRY_MAIN_AIRPORTS = {
     "CU": "HAV",  # Cuba - Havana
     "DO": "PUJ",  # Dominican Republic - Punta Cana
     "JM": "MBJ",  # Jamaica - Montego Bay
+    "EC": "UIO",  # Ecuador - Quito
+    "BO": "LPB",  # Bolivia - La Paz
+    "UY": "MVD",  # Uruguay - Montevideo
+    "GT": "GUA",  # Guatemala - Guatemala City
+    "HN": "SAP",  # Honduras - San Pedro Sula
+    "NI": "MGA",  # Nicaragua - Managua
     # Africa
     "MA": "CMN",  # Morocco - Casablanca
     "EG": "CAI",  # Egypt - Cairo
@@ -84,11 +104,23 @@ COUNTRY_MAIN_AIRPORTS = {
     "MU": "MRU",  # Mauritius
     "SC": "SEZ",  # Seychelles - Mahe
     "SN": "DSS",  # Senegal - Dakar
+    "GH": "ACC",  # Ghana - Accra
+    "RW": "KGL",  # Rwanda - Kigali
+    "UG": "EBB",  # Uganda - Entebbe
+    "ET": "ADD",  # Ethiopia - Addis Ababa
+    "NA": "WDH",  # Namibia - Windhoek
+    "BW": "GBE",  # Botswana - Gaborone
+    "MZ": "MPM",  # Mozambique - Maputo
+    "MG": "TNR",  # Madagascar - Antananarivo
     # Oceania
     "AU": "SYD",  # Australia - Sydney
     "NZ": "AKL",  # New Zealand - Auckland
     "FJ": "NAN",  # Fiji - Nadi
     "PF": "PPT",  # French Polynesia - Tahiti
+    "WS": "APW",  # Samoa - Apia
+    "VU": "VLI",  # Vanuatu - Port Vila
+    "NC": "NOU",  # New Caledonia - Noumea
+    "TO": "TBU",  # Tonga - Tongatapu
     # Caribbean & Islands
     "MV": "MLE",  # Maldives - Male
     "CY": "LCA",  # Cyprus - Larnaca
@@ -125,6 +157,11 @@ AIRPORT_COORDINATES = {
     "IST": (41.2753, 28.7519),  # Istanbul
     "ZAG": (45.7430, 16.0688),  # Zagreb Croatia
     "OTP": (44.5711, 26.0850),  # Bucharest Romania
+    "BTS": (48.1702, 17.2127),  # Bratislava Slovakia
+    "LJU": (46.2237, 14.4576),  # Ljubljana Slovenia
+    "SJJ": (43.8246, 18.3315),  # Sarajevo Bosnia
+    "LUX": (49.6233, 6.2044),   # Luxembourg
+    "RIX": (56.9236, 23.9711),  # Riga Latvia
     # Asia
     "BKK": (13.6900, 100.7501),  # Bangkok Suvarnabhumi
     "SGN": (10.8188, 106.6520),  # Ho Chi Minh City
@@ -142,6 +179,15 @@ AIRPORT_COORDINATES = {
     "DXB": (25.2532, 55.3657),  # Dubai
     "TLV": (32.0055, 34.8854),  # Tel Aviv
     "AMM": (31.7226, 35.9932),  # Amman
+    "TPE": (25.0797, 121.2342),  # Taipei Taiwan
+    "VTE": (17.9883, 102.5633),  # Vientiane Laos
+    "RGN": (16.9073, 96.1332),   # Yangon Myanmar
+    "TAS": (41.2579, 69.2817),   # Tashkent Uzbekistan
+    "NQZ": (51.0222, 71.4669),   # Nursultan Kazakhstan
+    "RUH": (24.9576, 46.6988),   # Riyadh Saudi Arabia
+    "MCT": (23.5933, 58.2844),   # Muscat Oman
+    "DOH": (25.2731, 51.6081),   # Doha Qatar
+    "BAH": (26.2708, 50.6336),   # Bahrain
     # Americas
     "JFK": (40.6413, -73.7781),  # New York JFK
     "YYZ": (43.6777, -79.6248),  # Toronto
@@ -156,6 +202,12 @@ AIRPORT_COORDINATES = {
     "PUJ": (18.5674, -68.3634),  # Punta Cana
     "PTY": (9.0714, -79.3835),   # Panama City Tocumen
     "MBJ": (18.5037, -77.9134),  # Montego Bay Jamaica
+    "UIO": (-0.1292, -78.3575),   # Quito Ecuador
+    "LPB": (-16.5133, -68.1922),  # La Paz Bolivia
+    "MVD": (-34.8381, -56.0308),  # Montevideo Uruguay
+    "GUA": (14.5833, -90.5275),   # Guatemala City
+    "SAP": (15.4526, -87.9236),   # San Pedro Sula Honduras
+    "MGA": (12.1415, -86.1682),   # Managua Nicaragua
     # Africa
     "CMN": (33.3675, -7.5899),  # Casablanca
     "CAI": (30.1219, 31.4056),  # Cairo
@@ -167,11 +219,23 @@ AIRPORT_COORDINATES = {
     "DAR": (-6.8781, 39.2026),  # Dar es Salaam Tanzania
     "DSS": (14.7397, -17.4902), # Dakar Senegal
     "SID": (16.7414, -22.9494), # Sal Cape Verde
+    "ACC": (5.6052, -0.1668),   # Accra Ghana
+    "KGL": (-1.9686, 30.1395),  # Kigali Rwanda
+    "EBB": (0.0424, 32.4435),   # Entebbe Uganda
+    "ADD": (8.9779, 38.7993),   # Addis Ababa Ethiopia
+    "WDH": (-22.4799, 17.4709), # Windhoek Namibia
+    "GBE": (-24.5553, 25.9181), # Gaborone Botswana
+    "MPM": (-25.9208, 32.5726), # Maputo Mozambique
+    "TNR": (-18.7969, 47.4788), # Antananarivo Madagascar
     # Oceania & Islands
     "SYD": (-33.9399, 151.1753),  # Sydney
     "AKL": (-37.0082, 174.7850),  # Auckland
     "NAN": (-17.7554, 177.4434),  # Fiji Nadi
     "PPT": (-17.5537, -149.6068),  # Tahiti Papeete
+    "APW": (-13.8297, -171.9972), # Apia Samoa
+    "VLI": (-17.6993, 168.3199),  # Port Vila Vanuatu
+    "NOU": (-22.0146, 166.2129),  # Noumea New Caledonia
+    "TBU": (-21.2411, -175.1497), # Tongatapu Tonga
     "MLE": (4.1918, 73.5290),  # Maldives Male
     "LCA": (34.8751, 33.6249),  # Larnaca Cyprus
     "MLA": (35.8575, 14.4775),  # Malta
