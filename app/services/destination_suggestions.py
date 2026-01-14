@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import random
+from collections import defaultdict
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
@@ -21,6 +23,7 @@ from app.models.destination_suggestions import (
 
 if TYPE_CHECKING:
     from app.repositories.country_profiles_repository import CountryProfilesRepository
+    from app.services.flight_price_cache import FlightPriceCacheService
     from app.services.llm.openai_client import OpenAIClient
     from app.services.redis_cache import RedisCache
 
@@ -55,12 +58,17 @@ class DestinationSuggestionService:
     # Minimum score threshold for recommendation
     MIN_SCORE_THRESHOLD = 40
 
+    # Diversity settings
+    POOL_SIZE = 6  # Select from top 6 candidates
+    MAX_PER_REGION = 2  # Max countries from same region in pool
+
     def __init__(
         self,
         profiles_repo: "CountryProfilesRepository",
         llm_client: Optional["OpenAIClient"],
         redis_cache: "RedisCache",
         cache_ttl: int = 3600,
+        flight_price_cache: Optional["FlightPriceCacheService"] = None,
     ):
         """
         Initialize the destination suggestion service.
@@ -70,11 +78,13 @@ class DestinationSuggestionService:
             llm_client: OpenAI client for content generation (optional)
             redis_cache: Redis cache for response caching
             cache_ttl: Cache TTL in seconds (default: 1 hour)
+            flight_price_cache: Service for flight price lookups (optional)
         """
         self.profiles = profiles_repo
         self.llm = llm_client
         self.cache = redis_cache
         self.cache_ttl = cache_ttl
+        self.flight_price_cache = flight_price_cache
 
     async def get_suggestions(
         self,
@@ -140,12 +150,17 @@ class DestinationSuggestionService:
                 }
             )
 
-        # Sort by score descending and select top N
+        # Sort by score descending
         scored_countries.sort(key=lambda x: x["score"], reverse=True)
-        top_countries = scored_countries[:limit]
+
+        # Apply diversity selection with deterministic randomization
+        top_countries = self._select_diverse_random(
+            scored_countries, preferences, limit, self.POOL_SIZE
+        )
 
         logger.info(
-            f"Top {len(top_countries)} countries: {[c['profile'].get('country_code', '??') for c in top_countries]}"
+            f"Top {len(top_countries)} countries (diverse selection): "
+            f"{[c['profile'].get('country_code', '??') for c in top_countries]}"
         )
 
         # Generate LLM content for top destinations (skip if fast_mode)
@@ -179,6 +194,38 @@ class DestinationSuggestionService:
                 llm_map = {}
         elif fast_mode:
             logger.debug("Fast mode enabled - using pre-computed headlines")
+
+        # Fetch flight prices for all top countries at once (batch) with GUARANTEED results
+        flight_prices: dict[str, tuple[int, str]] = {}  # country_code -> (price, source)
+        if self.flight_price_cache and preferences.userLocation.city:
+            country_codes = [c["profile"].get("country_code", "") for c in top_countries]
+            # Build profiles dict for fallback estimation
+            profiles_dict = {
+                c["profile"].get("country_code", ""): c["profile"]
+                for c in top_countries
+            }
+            try:
+                flight_prices = await self.flight_price_cache.get_flight_prices_batch_with_fallbacks(
+                    origin_city=preferences.userLocation.city,
+                    destination_country_codes=country_codes,
+                    destination_profiles=profiles_dict,
+                    currency="EUR",
+                )
+                logger.info(f"Fetched flight prices for {len(flight_prices)} countries (with fallbacks)")
+            except Exception as e:
+                logger.warning(f"Failed to fetch flight prices: {e}")
+                # Even if batch fails, try individual fallbacks
+                for country_code in country_codes:
+                    profile = profiles_dict.get(country_code, {})
+                    try:
+                        price, source = await self.flight_price_cache.get_flight_price_with_fallbacks(
+                            origin_city=preferences.userLocation.city,
+                            destination_country_code=country_code,
+                            destination_profile=profile,
+                        )
+                        flight_prices[country_code] = (price, source)
+                    except Exception:
+                        pass
 
         # Build suggestion objects
         for country_data in top_countries:
@@ -228,6 +275,11 @@ class DestinationSuggestionService:
                 for a in profile.get("top_activities", [])[:5]
             ]
 
+            # Get flight price from batch results (now with source)
+            flight_price_data = flight_prices.get(country_code)
+            flight_price = flight_price_data[0] if flight_price_data else None
+            flight_price_source = flight_price_data[1] if flight_price_data else None
+
             suggestion = DestinationSuggestion(
                 countryCode=country_code,
                 countryName=profile.get("country_name", "Unknown"),
@@ -240,7 +292,10 @@ class DestinationSuggestionService:
                 topActivities=top_activities,
                 bestSeasons=profile.get("best_seasons", []),
                 flightDurationFromOrigin=None,
-                flightPriceEstimate=None,
+                flightPriceEstimate=flight_price,
+                flightPriceSource=flight_price_source,
+                imageUrl=profile.get("photo_url"),
+                imageCredit=profile.get("photo_credit"),
             )
 
             suggestions.append(suggestion)
@@ -492,3 +547,93 @@ class DestinationSuggestionService:
 
         serialized = json.dumps(key_data, sort_keys=True)
         return hashlib.md5(serialized.encode()).hexdigest()
+
+    def _select_diverse_random(
+        self,
+        scored_countries: list[dict],
+        preferences: UserPreferencesPayload,
+        limit: int = 3,
+        pool_size: int = 6,
+    ) -> list[dict]:
+        """
+        Select destinations with diversity and deterministic randomization.
+
+        Takes the top-scoring countries, ensures regional diversity,
+        then selects a random subset using a deterministic seed based
+        on user preferences (same preferences = same results for caching).
+
+        Args:
+            scored_countries: Countries sorted by score (descending)
+            preferences: User preferences (used for deterministic seed)
+            limit: Number of destinations to return
+            pool_size: Size of diverse pool to select from
+
+        Returns:
+            List of selected country data dicts
+        """
+        if len(scored_countries) <= limit:
+            return scored_countries
+
+        # Build diverse pool with regional balance
+        diverse_pool = self._ensure_region_diversity(
+            scored_countries[: pool_size * 2], pool_size
+        )
+
+        if len(diverse_pool) <= limit:
+            return diverse_pool
+
+        # Generate deterministic seed from preferences
+        # Same preferences will always produce the same selection
+        seed_data = (
+            f"{preferences.travelStyle.value}_"
+            f"{sorted(preferences.interests)}_"
+            f"{preferences.budgetLevel.value}"
+        )
+        seed = int(hashlib.md5(seed_data.encode()).hexdigest()[:8], 16)
+
+        # Use seeded random for reproducible selection
+        rng = random.Random(seed)
+        selected = rng.sample(diverse_pool, limit)
+
+        # Sort selected by score for consistent display order
+        selected.sort(key=lambda x: x["score"], reverse=True)
+
+        logger.debug(
+            f"Diverse selection: pool={len(diverse_pool)}, "
+            f"selected={[c['profile'].get('country_code') for c in selected]}"
+        )
+
+        return selected
+
+    def _ensure_region_diversity(
+        self, candidates: list[dict], target_count: int
+    ) -> list[dict]:
+        """
+        Ensure regional diversity in the candidate pool.
+
+        Limits the number of countries from each region to avoid
+        recommendations like "Thailand, Vietnam, Indonesia" all from
+        Southeast Asia.
+
+        Args:
+            candidates: Sorted list of country candidates
+            target_count: Target size of diverse pool
+
+        Returns:
+            List of countries with regional diversity
+        """
+        region_counts: dict[str, int] = defaultdict(int)
+        diverse_pool: list[dict] = []
+
+        for candidate in candidates:
+            region = candidate["profile"].get("region", "Unknown")
+
+            # Allow max N countries per region
+            if region_counts[region] < self.MAX_PER_REGION:
+                diverse_pool.append(candidate)
+                region_counts[region] += 1
+
+            if len(diverse_pool) >= target_count:
+                break
+
+        return diverse_pool

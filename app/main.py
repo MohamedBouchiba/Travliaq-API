@@ -53,6 +53,7 @@ from app.services.booking.hotels_service import HotelsService
 from app.repositories.country_profiles_repository import CountryProfilesRepository
 from app.services.llm.openai_client import OpenAIClient
 from app.services.destination_suggestions import DestinationSuggestionService
+from app.services.flight_price_cache import FlightPriceCacheService
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
@@ -273,12 +274,25 @@ async def startup_event() -> None:
         app.state.openai_client = None
         logger.info("OpenAI LLM not configured - destination suggestions will use fallback content")
 
+    # Initialize flight price cache service (requires flights service and airports service)
+    if app.state.flights_service and app.state.airports_service:
+        app.state.flight_price_cache = FlightPriceCacheService(
+            mongo_manager=app.state.mongo_manager,
+            flights_service=app.state.flights_service,
+            airports_service=app.state.airports_service,
+        )
+        logger.info("Flight price cache service initialized")
+    else:
+        app.state.flight_price_cache = None
+        logger.info("Flight price cache not available (flights or airports service not configured)")
+
     # Initialize destination suggestions service
     app.state.destination_suggestions_service = DestinationSuggestionService(
         profiles_repo=app.state.country_profiles_repo,
         llm_client=app.state.openai_client,
         redis_cache=app.state.redis_cache,
-        cache_ttl=settings.cache_ttl_destination_suggestions
+        cache_ttl=settings.cache_ttl_destination_suggestions,
+        flight_price_cache=app.state.flight_price_cache,
     )
     logger.info("Destination suggestions service initialized")
 

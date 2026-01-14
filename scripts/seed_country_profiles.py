@@ -68,11 +68,11 @@ COUNTRY_PROFILES = [
         "best_seasons": ["Printemps", "Automne"],
         "trending_score": 90,
         "top_activities": [
-            {"name": "Tour Eiffel", "emoji": "fr", "category": "culture"},
-            {"name": "Degustation de vins", "emoji": "wine_glass", "category": "food"},
-            {"name": "Chateaux de la Loire", "emoji": "european_castle", "category": "history"},
-            {"name": "Cote d'Azur", "emoji": "beach", "category": "beach"},
-            {"name": "Mont Saint-Michel", "emoji": "mountain", "category": "culture"}
+            {"name": "Tour Eiffel", "emoji": "🗼", "category": "landmark"},
+            {"name": "Degustation de vins", "emoji": "🍷", "category": "food"},
+            {"name": "Chateaux de la Loire", "emoji": "🏰", "category": "history"},
+            {"name": "Cote d'Azur", "emoji": "🏖️", "category": "beach"},
+            {"name": "Mont Saint-Michel", "emoji": "🏔️", "category": "landmark"}
         ],
         "fallback_headlines": {
             "solo": "France, l'art de vivre en solo",

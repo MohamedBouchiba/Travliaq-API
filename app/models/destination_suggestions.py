@@ -175,7 +175,16 @@ class DestinationSuggestion(BaseModel):
     bestSeasons: List[str] = Field(default_factory=list)
     flightDurationFromOrigin: Optional[str] = None
     flightPriceEstimate: Optional[int] = Field(
-        None, description="Average flight price in EUR"
+        None, description="Average round-trip flight price in EUR"
+    )
+    flightPriceSource: Optional[Literal["cache", "api", "estimated"]] = Field(
+        None, description="Source of flight price: cache, api, or estimated"
+    )
+    imageUrl: Optional[str] = Field(
+        None, description="URL of country cover image"
+    )
+    imageCredit: Optional[str] = Field(
+        None, description="Photo attribution/credit"
     )
 
 
