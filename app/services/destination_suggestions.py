@@ -59,8 +59,9 @@ class DestinationSuggestionService:
     MIN_SCORE_THRESHOLD = 40
 
     # Diversity settings
-    POOL_SIZE = 6  # Select from top 6 candidates
+    EXTRA_POOL_SIZE = 5  # Take N + 5 candidates for random selection
     MAX_PER_REGION = 2  # Max countries from same region in pool
+    VARIATION_INTERVAL_HOURS = 1  # Change recommendations every hour
 
     def __init__(
         self,
@@ -154,8 +155,10 @@ class DestinationSuggestionService:
         scored_countries.sort(key=lambda x: x["score"], reverse=True)
 
         # Apply diversity selection with deterministic randomization
+        # Pool size = limit + EXTRA_POOL_SIZE (e.g., 3 + 5 = 8 candidates)
+        pool_size = limit + self.EXTRA_POOL_SIZE
         top_countries = self._select_diverse_random(
-            scored_countries, preferences, limit, self.POOL_SIZE
+            scored_countries, preferences, limit, pool_size
         )
 
         logger.info(
@@ -531,6 +534,9 @@ class DestinationSuggestionService:
         """
         Build unique cache key from preferences.
 
+        Includes time bucket to allow cache to expire and vary recommendations
+        over time while still being efficient within the same hour.
+
         Args:
             preferences: User preferences
             current_month: Current/target travel month
@@ -538,6 +544,9 @@ class DestinationSuggestionService:
         Returns:
             MD5 hash of normalized preferences
         """
+        # Time bucket ensures cache expires hourly for varied recommendations
+        time_bucket = datetime.now().hour // self.VARIATION_INTERVAL_HOURS
+
         key_data = {
             "style": preferences.styleAxes.model_dump(),
             "interests": sorted(preferences.interests),
@@ -546,6 +555,8 @@ class DestinationSuggestionService:
             "occasion": preferences.occasion.value if preferences.occasion else None,
             "budget": preferences.budgetLevel.value,
             "month": current_month,
+            "time_bucket": time_bucket,
+            "city": preferences.userLocation.city,  # Include city for airport-specific results
         }
 
         serialized = json.dumps(key_data, sort_keys=True)
@@ -578,32 +589,36 @@ class DestinationSuggestionService:
             return scored_countries
 
         # Build diverse pool with regional balance
+        # Take more candidates to ensure we have enough after region filtering
         diverse_pool = self._ensure_region_diversity(
-            scored_countries[: pool_size * 2], pool_size
+            scored_countries[: pool_size * 3], pool_size
         )
 
         if len(diverse_pool) <= limit:
             return diverse_pool
 
-        # Generate deterministic seed from preferences
-        # Same preferences will always produce the same selection
+        # Generate deterministic seed from preferences + time bucket
+        # This allows cache to work within the hour but vary recommendations over time
+        time_bucket = datetime.now().hour // self.VARIATION_INTERVAL_HOURS
         seed_data = (
             f"{preferences.travelStyle.value}_"
             f"{sorted(preferences.interests)}_"
-            f"{preferences.budgetLevel.value}"
+            f"{preferences.budgetLevel.value}_"
+            f"{time_bucket}"
         )
         seed = int(hashlib.md5(seed_data.encode()).hexdigest()[:8], 16)
 
-        # Use seeded random for reproducible selection
+        # Use seeded random for reproducible selection within time bucket
         rng = random.Random(seed)
-        selected = rng.sample(diverse_pool, limit)
+        selected = rng.sample(diverse_pool, min(limit, len(diverse_pool)))
 
         # Sort selected by score for consistent display order
         selected.sort(key=lambda x: x["score"], reverse=True)
 
         logger.debug(
             f"Diverse selection: pool={len(diverse_pool)}, "
-            f"selected={[c['profile'].get('country_code') for c in selected]}"
+            f"selected={[c['profile'].get('country_code') for c in selected]}, "
+            f"time_bucket={time_bucket}"
         )
 
         return selected
