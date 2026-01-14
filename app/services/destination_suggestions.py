@@ -23,6 +23,7 @@ from app.models.destination_suggestions import (
 
 if TYPE_CHECKING:
     from app.repositories.country_profiles_repository import CountryProfilesRepository
+    from app.services.airports import AirportsService
     from app.services.flight_price_cache import FlightPriceCacheService
     from app.services.llm.openai_client import OpenAIClient
     from app.services.redis_cache import RedisCache
@@ -69,6 +70,7 @@ class DestinationSuggestionService:
         redis_cache: "RedisCache",
         cache_ttl: int = 3600,
         flight_price_cache: Optional["FlightPriceCacheService"] = None,
+        airports_service: Optional["AirportsService"] = None,
     ):
         """
         Initialize the destination suggestion service.
@@ -79,12 +81,14 @@ class DestinationSuggestionService:
             redis_cache: Redis cache for response caching
             cache_ttl: Cache TTL in seconds (default: 1 hour)
             flight_price_cache: Service for flight price lookups (optional)
+            airports_service: Service for finding nearest airports (optional)
         """
         self.profiles = profiles_repo
         self.llm = llm_client
         self.cache = redis_cache
         self.cache_ttl = cache_ttl
         self.flight_price_cache = flight_price_cache
+        self.airports_service = airports_service
 
     async def get_suggestions(
         self,
@@ -303,12 +307,28 @@ class DestinationSuggestionService:
         # Build profile completeness
         profile_completeness = self._calculate_profile_completeness(preferences)
 
+        # Find nearest airport to user's location
+        source_airport_iata: Optional[str] = None
+        if self.airports_service and preferences.userLocation.city:
+            try:
+                result = self.airports_service.find_nearest_airports(
+                    city_query=preferences.userLocation.city,
+                    limit=1,
+                    country_code=preferences.userLocation.country,
+                )
+                if result and result.get("airports"):
+                    source_airport_iata = result["airports"][0].get("iata")
+                    logger.info(f"Found nearest airport: {source_airport_iata}")
+            except Exception as e:
+                logger.warning(f"Failed to find nearest airport: {e}")
+
         # Build response
         response = DestinationSuggestionsResponse(
             success=True,
             suggestions=suggestions,
             generatedAt=datetime.utcnow().isoformat() + "Z",
             basedOnProfile=profile_completeness,
+            sourceAirportIata=source_airport_iata,
         )
 
         # Cache response

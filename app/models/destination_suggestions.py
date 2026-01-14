@@ -204,6 +204,9 @@ class DestinationSuggestionsResponse(BaseModel):
         default_factory=lambda: datetime.utcnow().isoformat() + "Z"
     )
     basedOnProfile: ProfileCompleteness
+    sourceAirportIata: Optional[str] = Field(
+        None, description="IATA code of the nearest airport to user's location"
+    )
 
 
 # ============================================================================
