@@ -84,6 +84,100 @@ async def clear_map_prices_cache(request: Request) -> dict:
     }
 
 
+class ClearInvalidRoutesRequest(BaseModel):
+    """Request model for clearing invalid flight routes."""
+    origin: Optional[str] = Field(
+        None,
+        description="Optional IATA code to clear only routes from this origin (e.g., 'BRU'). If omitted, clears all.",
+        min_length=3,
+        max_length=3
+    )
+
+
+@router.get("/invalid-routes/list")
+async def list_invalid_routes(request: Request, origin: Optional[str] = None) -> dict:
+    """
+    List known invalid flight routes from MongoDB.
+
+    Use this to diagnose why certain destinations don't show prices on the map.
+    """
+    mongo_manager = request.app.state.mongo_manager
+    if not mongo_manager:
+        raise HTTPException(status_code=503, detail="MongoDB not available")
+
+    try:
+        db = mongo_manager.client[mongo_manager._settings.mongodb_db]
+        collection = db["invalid_flight_routes"]
+
+        query = {"origin": origin.upper()} if origin else {}
+        total_count = await collection.count_documents(query)
+
+        cursor = collection.find(query).sort("last_checked_at", -1).limit(200)
+        routes = []
+        async for doc in cursor:
+            routes.append({
+                "origin": doc.get("origin"),
+                "destination": doc.get("destination"),
+                "route_key": doc.get("route_key"),
+                "last_checked_at": doc.get("last_checked_at").isoformat() if doc.get("last_checked_at") else None,
+                "first_detected_at": doc.get("first_detected_at").isoformat() if doc.get("first_detected_at") else None,
+                "failure_count": doc.get("failure_count", 0),
+            })
+
+        return {
+            "total_count": total_count,
+            "showing": len(routes),
+            "routes": routes,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to list invalid routes: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to list invalid routes: {str(e)}")
+
+
+@router.post("/invalid-routes/clear")
+async def clear_invalid_routes(
+    request: Request,
+    body: ClearInvalidRoutesRequest = ClearInvalidRoutesRequest()
+) -> dict:
+    """
+    Clear invalid flight routes from MongoDB blacklist.
+
+    Also clears Redis map-price cache to flush cached None values.
+    Use this to restore destinations that were incorrectly blacklisted.
+    """
+    mongo_manager = request.app.state.mongo_manager
+    if not mongo_manager:
+        raise HTTPException(status_code=503, detail="MongoDB not available")
+
+    try:
+        db = mongo_manager.client[mongo_manager._settings.mongodb_db]
+        collection = db["invalid_flight_routes"]
+
+        query = {"origin": body.origin.upper()} if body.origin else {}
+        result = await collection.delete_many(query)
+
+        # Also clear Redis map-price cache (cached None values from blacklisted routes)
+        redis_cache = request.app.state.redis_cache
+        redis_deleted = redis_cache.clear_pattern("map_price:*")
+
+        origin_msg = f" from {body.origin.upper()}" if body.origin else ""
+        logger.info(
+            f"Cleared {result.deleted_count} invalid routes{origin_msg} "
+            f"and {redis_deleted} Redis map-price keys"
+        )
+
+        return {
+            "message": f"Invalid routes cleared successfully{origin_msg}",
+            "invalid_routes_deleted": result.deleted_count,
+            "redis_keys_deleted": redis_deleted,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to clear invalid routes: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to clear invalid routes: {str(e)}")
+
+
 @router.post("/cache/clear-hotels")
 async def clear_hotels_cache(request: Request) -> dict:
     """
