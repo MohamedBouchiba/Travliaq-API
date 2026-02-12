@@ -36,7 +36,8 @@ class FlightsService:
     CACHE_TTL = 86400  # 24 hours in seconds
     MAP_PRICES_CACHE_TTL = 172800  # 2 days in seconds
     MAP_PRICES_CONCURRENCY = 10  # Max concurrent API calls
-    INVALID_ROUTE_TTL_DAYS = 30  # Recheck invalid routes after 30 days
+    INVALID_ROUTE_TTL_DAYS = 7  # Recheck invalid routes after 7 days
+    INVALID_ROUTE_MIN_FAILURES = 3  # Only blacklist after 3 consecutive failures
 
     def __init__(
         self,
@@ -802,10 +803,11 @@ class FlightsService:
             # Build route keys to check
             route_keys = [f"{origin}_{dest}" for dest in destinations]
 
-            # Find invalid routes that are not stale
+            # Find invalid routes that are not stale and have enough failures
             cursor = collection.find({
                 "route_key": {"$in": route_keys},
-                "last_checked_at": {"$gt": cutoff_date}
+                "last_checked_at": {"$gt": cutoff_date},
+                "failure_count": {"$gte": self.INVALID_ROUTE_MIN_FAILURES}
             })
 
             invalid_destinations = set()
