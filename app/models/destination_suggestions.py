@@ -52,6 +52,15 @@ class BudgetLevel(str, Enum):
     LUXURY = "luxury"
 
 
+class StyleAxisName(str, Enum):
+    """Style axis identifiers matching frontend camelCase keys."""
+
+    CHILL_VS_INTENSE = "chillVsIntense"
+    CITY_VS_NATURE = "cityVsNature"
+    ECO_VS_LUXURY = "ecoVsLuxury"
+    TOURIST_VS_LOCAL = "touristVsLocal"
+
+
 # ============================================================================
 # INPUT MODELS (REQUEST)
 # ============================================================================
@@ -110,6 +119,20 @@ class UserPreferencesPayload(BaseModel):
     travelMonth: Optional[int] = Field(
         None, ge=1, le=12, description="Target travel month (1-12) for seasonal scoring"
     )
+    styleAxesOrder: Optional[List[StyleAxisName]] = Field(
+        None,
+        description="Priority order of style axes (index 0 = most important)",
+    )
+
+    @field_validator("styleAxesOrder")
+    @classmethod
+    def validate_axes_order(cls, v: Optional[List[StyleAxisName]]) -> Optional[List[StyleAxisName]]:
+        """Ensure all 4 axes are present and unique, or fallback to None."""
+        if v is None:
+            return v
+        if len(v) != 4 or len(set(v)) != 4:
+            return None
+        return v
 
     @field_validator("interests")
     @classmethod

@@ -20,6 +20,12 @@ from app.models.destination_suggestions import (
     TopActivity,
     UserPreferencesPayload,
 )
+from app.services.flight_price_cache import (
+    COUNTRY_MAIN_AIRPORTS,
+    AIRPORT_COORDINATES,
+)
+
+import math
 
 if TYPE_CHECKING:
     from app.repositories.country_profiles_repository import CountryProfilesRepository
@@ -34,25 +40,41 @@ class DestinationSuggestionService:
     """
     Service for generating personalized destination suggestions.
 
-    Uses a multi-dimensional scoring algorithm:
-    - 25% Style Matching: Distance between user style and country profile
-    - 30% Interest Alignment: Match user interests with country affinities
-    - 15% Must-Haves: Validation of mandatory requirements
+    Uses a 9-dimensional scoring algorithm:
+    - 20% Style Matching: Position-weighted distance between user style and country profile
+    - 20% Interest Alignment: Match user interests with country affinities
+    - 12% Must-Haves: Validation of mandatory requirements
     - 10% Budget Alignment: Cost of living vs budget level
-    - 10% Seasonal Relevance: Bonus for visiting in the right season
-    - 5% Trending Score: Current popularity
+    - 15% Climate: Temperature + sunshine matched to user interests and travel month
+    - 15% Distance: Haversine proximity from departure (budget-sensitive)
+    - 3% Trending Score: Current popularity
     - 5% Travel Context: Travel style and occasion bonuses
     """
 
     # Scoring weight distribution (total = 100)
     WEIGHTS = {
-        "style": 25,
-        "interests": 30,
-        "must_haves": 15,
+        "style": 20,
+        "interests": 20,
+        "must_haves": 12,
         "budget": 10,
-        "seasonal": 10,
-        "trending": 5,
+        "climate": 15,
+        "distance": 15,
+        "trending": 3,
         "context": 5,
+    }
+
+    # Position weights for style axes when user has defined an order
+    POSITION_WEIGHTS = [0.40, 0.30, 0.20, 0.10]
+
+    # Default axes order (equal weighting) when no order is provided
+    DEFAULT_AXES_ORDER = ["chillVsIntense", "cityVsNature", "ecoVsLuxury", "touristVsLocal"]
+
+    # Mapping: camelCase axis name → (snake_case profile key, camelCase pref key)
+    AXIS_KEY_MAP = {
+        "chillVsIntense": ("chill_vs_intense", "chillVsIntense"),
+        "cityVsNature": ("city_vs_nature", "cityVsNature"),
+        "ecoVsLuxury": ("eco_vs_luxury", "ecoVsLuxury"),
+        "touristVsLocal": ("tourist_vs_local", "touristVsLocal"),
     }
 
     # Minimum score threshold for recommendation
@@ -337,7 +359,7 @@ class DestinationSuggestionService:
         current_month: int,
     ) -> tuple[int, list[str]]:
         """
-        Calculate match score using multi-dimensional algorithm.
+        Calculate match score using 9-dimensional algorithm.
 
         Args:
             profile: Country profile document
@@ -350,25 +372,35 @@ class DestinationSuggestionService:
         scores: dict[str, float] = {}
         factors: list[str] = []
 
-        # === 1. STYLE MATCHING (25%) ===
+        # === 1. STYLE MATCHING (20%) — weighted by position ===
         style = profile.get("style_scores", {})
         axes = prefs.styleAxes
 
-        distances = [
-            abs(style.get("chill_vs_intense", 50) - axes.chillVsIntense),
-            abs(style.get("city_vs_nature", 50) - axes.cityVsNature),
-            abs(style.get("eco_vs_luxury", 50) - axes.ecoVsLuxury),
-            abs(style.get("tourist_vs_local", 50) - axes.touristVsLocal),
-        ]
-        avg_dist = sum(distances) / len(distances)
-        scores["style"] = max(0, 100 - avg_dist)
+        axes_order = (
+            [a.value for a in prefs.styleAxesOrder]
+            if prefs.styleAxesOrder
+            else None
+        )
+        if axes_order:
+            pos_weights = self.POSITION_WEIGHTS  # [0.40, 0.30, 0.20, 0.10]
+        else:
+            axes_order = self.DEFAULT_AXES_ORDER
+            pos_weights = [0.25, 0.25, 0.25, 0.25]
 
-        if avg_dist < 15:
+        weighted_distance = 0.0
+        for i, axis_key in enumerate(axes_order):
+            snake_key, camel_key = self.AXIS_KEY_MAP[axis_key]
+            distance = abs(style.get(snake_key, 50) - getattr(axes, camel_key))
+            weighted_distance += distance * pos_weights[i]
+
+        scores["style"] = max(0.0, 100.0 - weighted_distance)
+
+        if weighted_distance < 15:
             factors.append("Style de voyage parfaitement adapte")
-        elif avg_dist < 25:
+        elif weighted_distance < 25:
             factors.append("Ambiance correspondant a vos attentes")
 
-        # === 2. INTEREST ALIGNMENT (30%) ===
+        # === 2. INTEREST ALIGNMENT (20%) ===
         interest_scores = profile.get("interest_scores", {})
         user_interests = [i.lower() for i in prefs.interests]
 
@@ -386,7 +418,7 @@ class DestinationSuggestionService:
         else:
             scores["interests"] = 70  # Neutral score if no interests specified
 
-        # === 3. MUST-HAVES VALIDATION (15%) ===
+        # === 3. MUST-HAVES VALIDATION (12%) ===
         must_haves = profile.get("must_haves", {})
         mh = prefs.mustHaves
         penalty = 0
@@ -436,25 +468,105 @@ class DestinationSuggestionService:
             if col > 100:
                 factors.append("Options luxe disponibles")
 
-        # === 5. SEASONAL RELEVANCE (10%) ===
+        # === 5. CLIMATE (15%) — temperature + sunshine vs user preferences ===
+        monthly_climate = profile.get("monthly_climate", [])
         best_months = profile.get("best_months", [])
         avoid_months = profile.get("avoid_months", [])
 
-        if current_month in best_months:
-            scores["seasonal"] = 100
-            factors.append("Saison ideale pour visiter")
-        elif current_month in avoid_months:
-            scores["seasonal"] = 30
-        else:
-            scores["seasonal"] = 70
+        month_data = next(
+            (m for m in monthly_climate if m["month"] == current_month), None
+        )
 
-        # === 6. TRENDING SCORE (5%) ===
+        if month_data:
+            avg_temp = month_data["avg_temp_c"]
+            sunshine = month_data["sunshine_hours"]
+
+            # Determine ideal temp range based on user interests
+            user_interest_set = set(i.lower() for i in prefs.interests)
+            if user_interest_set & {"beach", "wellness"}:
+                ideal_min, ideal_max = 24, 35  # wants warm
+            elif user_interest_set & {"adventure", "sports"}:
+                ideal_min, ideal_max = 12, 28  # tolerates wide range
+            elif user_interest_set & {"culture", "history", "art", "food", "shopping"}:
+                ideal_min, ideal_max = 15, 30  # comfortable
+            else:
+                ideal_min, ideal_max = 18, 28  # pleasant default
+
+            # Temperature score: 100 if in ideal range, decreasing outside
+            if ideal_min <= avg_temp <= ideal_max:
+                temp_score = 100.0
+            else:
+                deviation = min(abs(avg_temp - ideal_min), abs(avg_temp - ideal_max))
+                temp_score = max(0.0, 100.0 - deviation * 5)  # -5 pts per °C
+
+            # Sunshine bonus: 0-8h mapped to 0-100
+            sunshine_score = min(100.0, sunshine * 12.5)  # 8h+ = 100
+
+            # Combine: 60% temp, 40% sunshine
+            climate_score = temp_score * 0.6 + sunshine_score * 0.4
+
+            # Seasonal overlay: bonus/malus from best/avoid months
+            if current_month in best_months:
+                climate_score = min(100.0, climate_score + 10)
+            elif current_month in avoid_months:
+                climate_score = max(0.0, climate_score - 25)
+
+            scores["climate"] = climate_score
+
+            if climate_score >= 85:
+                factors.append("Climat ideal pour cette periode")
+            elif climate_score >= 70:
+                factors.append("Bon climat a cette saison")
+        else:
+            # Fallback: use existing seasonal data
+            if current_month in best_months:
+                scores["climate"] = 85
+                factors.append("Saison ideale pour visiter")
+            elif current_month in avoid_months:
+                scores["climate"] = 30
+            else:
+                scores["climate"] = 65
+
+        # === 6. DISTANCE (15%) — proximity from departure ===
+        country_code = profile.get("country_code", "")
+        dest_iata = COUNTRY_MAIN_AIRPORTS.get(country_code)
+        dep_coords = self._get_departure_coords(prefs)
+        dest_coords = AIRPORT_COORDINATES.get(dest_iata) if dest_iata else None
+
+        if dep_coords and dest_coords:
+            distance_km = self._haversine(dep_coords, dest_coords)
+
+            if prefs.budgetLevel in [BudgetLevel.BUDGET, BudgetLevel.COMFORT]:
+                # Budget: proximity matters a lot
+                if distance_km < 2000:
+                    scores["distance"] = 100
+                    factors.append("Destination proche et economique")
+                elif distance_km < 4000:
+                    scores["distance"] = 70
+                elif distance_km < 7000:
+                    scores["distance"] = 45
+                else:
+                    scores["distance"] = 25
+            else:
+                # Premium/Luxury: distance matters less
+                if distance_km < 3000:
+                    scores["distance"] = 100
+                elif distance_km < 6000:
+                    scores["distance"] = 80
+                elif distance_km < 10000:
+                    scores["distance"] = 60
+                else:
+                    scores["distance"] = 45
+        else:
+            scores["distance"] = 60  # Neutral when no coordinates available
+
+        # === 7. TRENDING SCORE (3%) ===
         trending = profile.get("trending_score", 50)
         scores["trending"] = trending
         if trending >= 80:
             factors.append("Destination tendance")
 
-        # === 7. TRAVEL CONTEXT (5%) ===
+        # === 8. TRAVEL CONTEXT (5%) ===
         travel_bonuses = profile.get("travel_style_bonuses", {})
         style_bonus = travel_bonuses.get(prefs.travelStyle.value, 0)
 
@@ -468,12 +580,80 @@ class DestinationSuggestionService:
         scores["context"] = min(100, max(0, 50 + style_bonus + occasion_bonus))
 
         # === CALCULATE FINAL WEIGHTED SCORE ===
-        final = sum(scores[k] * (self.WEIGHTS[k] / 100) for k in self.WEIGHTS)
+        dynamic_weights = self._get_dynamic_weights(prefs)
+        final = sum(scores[k] * (dynamic_weights[k] / 100) for k in dynamic_weights)
 
         # Limit to 5 key factors, prioritizing most specific
         factors = factors[:5]
 
         return int(round(final)), factors
+
+    @staticmethod
+    def _haversine(c1: tuple[float, float], c2: tuple[float, float]) -> float:
+        """Great-circle distance in km between two (lat, lon) points."""
+        lat1, lon1 = math.radians(c1[0]), math.radians(c1[1])
+        lat2, lon2 = math.radians(c2[0]), math.radians(c2[1])
+        dlat, dlon = lat2 - lat1, lon2 - lon1
+        a = (
+            math.sin(dlat / 2) ** 2
+            + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+        )
+        return 6371 * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    @staticmethod
+    def _get_departure_coords(
+        prefs: UserPreferencesPayload,
+    ) -> tuple[float, float] | None:
+        """Get departure coordinates from user location or nearest airport."""
+        loc = prefs.userLocation
+        if loc.lat is not None and loc.lng is not None:
+            return (loc.lat, loc.lng)
+        # Fallback: resolve city/country to a known airport
+        if loc.city:
+            city_lower = loc.city.lower()
+            # Common city → airport mapping for quick resolution
+            city_airport_map = {
+                "paris": "CDG", "london": "LHR", "londres": "LHR",
+                "new york": "JFK", "tokyo": "NRT", "dubai": "DXB",
+                "madrid": "MAD", "rome": "FCO", "roma": "FCO",
+                "berlin": "FRA", "amsterdam": "AMS", "lisbon": "LIS",
+                "lisbonne": "LIS", "bangkok": "BKK", "istanbul": "IST",
+                "barcelone": "MAD", "barcelona": "MAD", "marseille": "CDG",
+                "lyon": "CDG", "montreal": "YYZ", "montréal": "YYZ",
+                "casablanca": "CMN", "marrakech": "CMN", "tunis": "TUN",
+                "le caire": "CAI", "cairo": "CAI", "athènes": "ATH",
+                "athens": "ATH", "bruxelles": "BRU", "brussels": "BRU",
+            }
+            iata = city_airport_map.get(city_lower)
+            if iata and iata in AIRPORT_COORDINATES:
+                return AIRPORT_COORDINATES[iata]
+        return None
+
+    def _get_dynamic_weights(self, prefs: UserPreferencesPayload) -> dict[str, int]:
+        """Adjust dimension weights based on user's top priority axis."""
+        weights = dict(self.WEIGHTS)
+
+        if not prefs.styleAxesOrder:
+            return weights
+
+        top_axis = prefs.styleAxesOrder[0].value
+        eco = prefs.styleAxes.ecoVsLuxury
+        nature = prefs.styleAxes.cityVsNature
+
+        # ecoVsLuxury #1 + extreme value → boost budget & distance
+        if top_axis == "ecoVsLuxury" and (eco < 30 or eco > 70):
+            weights["budget"] += 5      # 10 → 15
+            weights["distance"] += 3    # 15 → 18
+            weights["trending"] -= 3    # 3 → 0
+            weights["context"] -= 5     # 5 → 0
+
+        # cityVsNature #1 + extreme value → boost climate
+        elif top_axis == "cityVsNature" and (nature < 30 or nature > 70):
+            weights["climate"] += 5     # 15 → 20
+            weights["trending"] -= 3    # 3 → 0
+            weights["context"] -= 2     # 5 → 3
+
+        return weights
 
     def _calculate_profile_completeness(
         self, preferences: UserPreferencesPayload
@@ -503,6 +683,10 @@ class DestinationSuggestionService:
         if preferences.styleAxes != default_axes:
             score += 20
             factors.append("Preferences de style definies")
+
+        if preferences.styleAxesOrder:
+            score += 10
+            factors.append("Priorites de style definies")
 
         if preferences.occasion:
             score += 10
@@ -549,6 +733,11 @@ class DestinationSuggestionService:
 
         key_data = {
             "style": preferences.styleAxes.model_dump(),
+            "axes_order": (
+                [a.value for a in preferences.styleAxesOrder]
+                if preferences.styleAxesOrder
+                else None
+            ),
             "interests": sorted(preferences.interests),
             "must_haves": preferences.mustHaves.model_dump(),
             "travel_style": preferences.travelStyle.value,
