@@ -119,6 +119,9 @@ class UserPreferencesPayload(BaseModel):
     travelMonth: Optional[int] = Field(
         None, ge=1, le=12, description="Target travel month (1-12) for seasonal scoring"
     )
+    tripDuration: Optional[str] = Field(
+        None, description="Trip duration: freeform string e.g. '2 jours', 'weekend', '1 semaine'"
+    )
     styleAxesOrder: Optional[List[StyleAxisName]] = Field(
         None,
         description="Priority order of style axes (index 0 = most important)",
@@ -197,6 +200,9 @@ class DestinationSuggestion(BaseModel):
     topActivities: List[TopActivity] = Field(default_factory=list)
     bestSeasons: List[str] = Field(default_factory=list)
     flightDurationFromOrigin: Optional[str] = None
+    flightDurationMinutes: Optional[int] = Field(
+        None, description="Estimated one-way flight duration in minutes"
+    )
     flightPriceEstimate: Optional[int] = Field(
         None, description="Average round-trip flight price in EUR"
     )

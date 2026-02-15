@@ -26,6 +26,7 @@ from app.services.flight_price_cache import (
 )
 
 import math
+import re
 
 if TYPE_CHECKING:
     from app.repositories.country_profiles_repository import CountryProfilesRepository
@@ -40,27 +41,31 @@ class DestinationSuggestionService:
     """
     Service for generating personalized destination suggestions.
 
-    Uses a 9-dimensional scoring algorithm:
-    - 20% Style Matching: Position-weighted distance between user style and country profile
-    - 20% Interest Alignment: Match user interests with country affinities
-    - 12% Must-Haves: Validation of mandatory requirements
-    - 10% Budget Alignment: Cost of living vs budget level
-    - 15% Climate: Temperature + sunshine matched to user interests and travel month
-    - 15% Distance: Haversine proximity from departure (budget-sensitive)
+    Uses an 11-dimensional scoring algorithm with two-phase pricing:
+    - 17% Style Matching: Position-weighted distance between user style and country profile
+    - 17% Interest Alignment: Match user interests with country affinities
+    - 10% Must-Haves: Validation of mandatory requirements
+    - 8% Budget Alignment: Cost of living vs budget level
+    - 12% Climate: Temperature + sunshine matched to user interests and travel month
+    - 10% Distance: Haversine proximity from departure (budget-sensitive)
     - 3% Trending Score: Current popularity
     - 5% Travel Context: Travel style and occasion bonuses
+    - 10% Trip Feasibility: Flight duration vs trip duration ratio
+    - 8% Flight Price: Real flight price scoring (Phase 2, via get_map_prices)
     """
 
     # Scoring weight distribution (total = 100)
     WEIGHTS = {
-        "style": 20,
-        "interests": 20,
-        "must_haves": 12,
-        "budget": 10,
-        "climate": 15,
-        "distance": 15,
+        "style": 17,
+        "interests": 17,
+        "must_haves": 10,
+        "budget": 8,
+        "climate": 12,
+        "distance": 10,
         "trending": 3,
         "context": 5,
+        "trip_feasibility": 10,
+        "flight_price": 8,
     }
 
     # Position weights for style axes when user has defined an order
@@ -156,28 +161,70 @@ class DestinationSuggestionService:
         profiles = await self.profiles.get_all_profiles()
         logger.info(f"Loaded {len(profiles)} country profiles")
 
-        # Score each country
+        # Phase 1: Score all countries (flight_price = neutral 70)
         scored_countries = []
         for profile in profiles:
-            score, key_factors = self._calculate_score(profile, preferences, current_month)
-
-            # Skip countries below threshold
+            score, key_factors, distance_km = self._calculate_score(
+                profile, preferences, current_month
+            )
             if score < self.MIN_SCORE_THRESHOLD:
                 continue
+            scored_countries.append({
+                "profile": profile,
+                "score": score,
+                "key_factors": key_factors,
+                "distance_km": distance_km,
+            })
 
-            scored_countries.append(
-                {
-                    "profile": profile,
-                    "score": score,
-                    "key_factors": key_factors,
-                }
-            )
-
-        # Sort by score descending
         scored_countries.sort(key=lambda x: x["score"], reverse=True)
 
-        # Apply diversity selection with deterministic randomization
-        # Pool size = limit + EXTRA_POOL_SIZE (e.g., 3 + 5 = 8 candidates)
+        # Phase 2: Re-score top candidates with real flight prices
+        source_airport_iata: Optional[str] = None
+        TOP_CANDIDATES = 20
+        top_candidates = scored_countries[:TOP_CANDIDATES]
+
+        if self.flight_price_cache and preferences.userLocation.city and top_candidates:
+            country_codes = [c["profile"].get("country_code", "") for c in top_candidates]
+            profiles_dict = {
+                c["profile"].get("country_code", ""): c["profile"]
+                for c in top_candidates
+            }
+            try:
+                phase2_prices, source_airport_iata = (
+                    await self.flight_price_cache.get_flight_prices_batch_with_fallbacks(
+                        origin_city=preferences.userLocation.city,
+                        destination_country_codes=country_codes,
+                        destination_profiles=profiles_dict,
+                        currency="EUR",
+                    )
+                )
+                if phase2_prices:
+                    all_prices = [p[0] for p in phase2_prices.values()]
+                    dynamic_weights = self._get_dynamic_weights(preferences)
+                    fp_weight = dynamic_weights.get("flight_price", 8)
+
+                    for country in top_candidates:
+                        cc = country["profile"].get("country_code", "")
+                        price_data = phase2_prices.get(cc)
+                        if price_data:
+                            real_fp_score = self._calculate_flight_price_score(
+                                price_data[0], preferences.budgetLevel, all_prices
+                            )
+                            country["score"] += int(round((real_fp_score - 70) * fp_weight / 100))
+                            country["score"] = max(0, min(100, country["score"]))
+                            country["flight_price"] = price_data[0]
+                            country["flight_price_source"] = price_data[1]
+
+                    top_candidates.sort(key=lambda x: x["score"], reverse=True)
+                    scored_countries = top_candidates + scored_countries[TOP_CANDIDATES:]
+                    logger.info(
+                        f"Phase 2: Re-scored {len(top_candidates)} candidates "
+                        f"with real flight prices from {source_airport_iata}"
+                    )
+            except Exception as e:
+                logger.warning(f"Phase 2 flight price scoring failed: {e}")
+
+        # Apply diversity selection
         pool_size = limit + self.EXTRA_POOL_SIZE
         top_countries = self._select_diverse_random(
             scored_countries, preferences, limit, pool_size
@@ -219,39 +266,6 @@ class DestinationSuggestionService:
                 llm_map = {}
         elif fast_mode:
             logger.debug("Fast mode enabled - using pre-computed headlines")
-
-        # Fetch flight prices for all top countries at once (batch) with GUARANTEED results
-        flight_prices: dict[str, tuple[int, str]] = {}  # country_code -> (price, source)
-        source_airport_iata: Optional[str] = None  # Airport used for price estimation
-        if self.flight_price_cache and preferences.userLocation.city:
-            country_codes = [c["profile"].get("country_code", "") for c in top_countries]
-            # Build profiles dict for fallback estimation
-            profiles_dict = {
-                c["profile"].get("country_code", ""): c["profile"]
-                for c in top_countries
-            }
-            try:
-                flight_prices, source_airport_iata = await self.flight_price_cache.get_flight_prices_batch_with_fallbacks(
-                    origin_city=preferences.userLocation.city,
-                    destination_country_codes=country_codes,
-                    destination_profiles=profiles_dict,
-                    currency="EUR",
-                )
-                logger.info(f"Fetched flight prices for {len(flight_prices)} countries from airport {source_airport_iata}")
-            except Exception as e:
-                logger.warning(f"Failed to fetch flight prices: {e}")
-                # Even if batch fails, try individual fallbacks
-                for country_code in country_codes:
-                    profile = profiles_dict.get(country_code, {})
-                    try:
-                        price, source = await self.flight_price_cache.get_flight_price_with_fallbacks(
-                            origin_city=preferences.userLocation.city,
-                            destination_country_code=country_code,
-                            destination_profile=profile,
-                        )
-                        flight_prices[country_code] = (price, source)
-                    except Exception:
-                        pass
 
         # Build suggestion objects
         for country_data in top_countries:
@@ -301,10 +315,18 @@ class DestinationSuggestionService:
                 for a in profile.get("top_activities", [])[:5]
             ]
 
-            # Get flight price from batch results (now with source)
-            flight_price_data = flight_prices.get(country_code)
-            flight_price = flight_price_data[0] if flight_price_data else None
-            flight_price_source = flight_price_data[1] if flight_price_data else None
+            # Flight price from Phase 2 scoring
+            flight_price = country_data.get("flight_price")
+            flight_price_source = country_data.get("flight_price_source")
+
+            # Flight duration from distance
+            dist_km = country_data.get("distance_km")
+            flight_duration_str = None
+            flight_duration_min = None
+            if dist_km:
+                flight_duration_min = self._estimate_flight_minutes(dist_km)
+                hours, mins = divmod(flight_duration_min, 60)
+                flight_duration_str = f"{hours}h{mins:02d}" if mins else f"{hours}h"
 
             suggestion = DestinationSuggestion(
                 countryCode=country_code,
@@ -317,7 +339,8 @@ class DestinationSuggestionService:
                 estimatedBudgetPerPerson=budget_estimate,
                 topActivities=top_activities,
                 bestSeasons=profile.get("best_seasons", []),
-                flightDurationFromOrigin=None,
+                flightDurationFromOrigin=flight_duration_str,
+                flightDurationMinutes=flight_duration_min,
                 flightPriceEstimate=flight_price,
                 flightPriceSource=flight_price_source,
                 imageUrl=profile.get("photo_url"),
@@ -357,17 +380,19 @@ class DestinationSuggestionService:
         profile: dict,
         prefs: UserPreferencesPayload,
         current_month: int,
-    ) -> tuple[int, list[str]]:
+        flight_price_score: Optional[float] = None,
+    ) -> tuple[int, list[str], Optional[float]]:
         """
-        Calculate match score using 9-dimensional algorithm.
+        Calculate match score using 11-dimensional algorithm.
 
         Args:
             profile: Country profile document
             prefs: User preferences
             current_month: Current/target travel month (1-12)
+            flight_price_score: Real flight price score (Phase 2). None = 70 neutral.
 
         Returns:
-            Tuple of (score 0-100, list of key factors)
+            Tuple of (score 0-100, list of key factors, distance_km or None)
         """
         scores: dict[str, float] = {}
         factors: list[str] = []
@@ -527,11 +552,12 @@ class DestinationSuggestionService:
             else:
                 scores["climate"] = 65
 
-        # === 6. DISTANCE (15%) — proximity from departure ===
+        # === 6. DISTANCE (10%) — proximity from departure ===
         country_code = profile.get("country_code", "")
         dest_iata = COUNTRY_MAIN_AIRPORTS.get(country_code)
         dep_coords = self._get_departure_coords(prefs)
         dest_coords = AIRPORT_COORDINATES.get(dest_iata) if dest_iata else None
+        distance_km: Optional[float] = None
 
         if dep_coords and dest_coords:
             distance_km = self._haversine(dep_coords, dest_coords)
@@ -579,6 +605,34 @@ class DestinationSuggestionService:
 
         scores["context"] = min(100, max(0, 50 + style_bonus + occasion_bonus))
 
+        # === 9. TRIP FEASIBILITY (10%) — flight duration vs trip duration ===
+        trip_days = self._parse_trip_days(prefs.tripDuration)
+        if trip_days and distance_km:
+            flight_hours = self._estimate_flight_minutes(distance_km) / 60
+            max_hours = self._max_flight_hours(trip_days)
+            ratio = flight_hours / max_hours
+
+            if ratio <= 0.5:
+                scores["trip_feasibility"] = 100
+            elif ratio <= 0.75:
+                scores["trip_feasibility"] = 85
+            elif ratio <= 1.0:
+                scores["trip_feasibility"] = 60
+            elif ratio <= 1.3:
+                scores["trip_feasibility"] = 30
+            else:
+                scores["trip_feasibility"] = max(0, 15 - (ratio - 1.3) * 20)
+
+            if scores["trip_feasibility"] >= 85:
+                factors.append("Vol court, ideal pour la duree du sejour")
+            elif scores["trip_feasibility"] <= 30:
+                factors.append("Vol trop long pour un court sejour")
+        else:
+            scores["trip_feasibility"] = 70  # Neutral when no trip duration
+
+        # === 10. FLIGHT PRICE (8%) — real price injected in Phase 2 ===
+        scores["flight_price"] = flight_price_score if flight_price_score is not None else 70
+
         # === CALCULATE FINAL WEIGHTED SCORE ===
         dynamic_weights = self._get_dynamic_weights(prefs)
         final = sum(scores[k] * (dynamic_weights[k] / 100) for k in dynamic_weights)
@@ -586,7 +640,7 @@ class DestinationSuggestionService:
         # Limit to 5 key factors, prioritizing most specific
         factors = factors[:5]
 
-        return int(round(final)), factors
+        return int(round(final)), factors, distance_km
 
     @staticmethod
     def _haversine(c1: tuple[float, float], c2: tuple[float, float]) -> float:
@@ -629,6 +683,94 @@ class DestinationSuggestionService:
                 return AIRPORT_COORDINATES[iata]
         return None
 
+    @staticmethod
+    def _parse_trip_days(trip_duration: Optional[str]) -> Optional[int]:
+        """Parse freeform FR/EN trip duration string into number of days."""
+        if not trip_duration:
+            return None
+        text = trip_duration.lower().strip()
+
+        # Direct keywords
+        if text in ("weekend", "un weekend", "we"):
+            return 2
+        if text in ("long weekend", "un long weekend"):
+            return 3
+
+        # Pattern: number + unit (jour/semaine/mois / day/week/month)
+        m = re.match(r"(\d+)\s*(jour|jours|day|days|j)\b", text)
+        if m:
+            return int(m.group(1))
+
+        m = re.match(r"(\d+)\s*(semaine|semaines|week|weeks)\b", text)
+        if m:
+            return int(m.group(1)) * 7
+
+        m = re.match(r"(\d+)\s*(mois|month|months)\b", text)
+        if m:
+            return int(m.group(1)) * 30
+
+        # "une semaine", "un mois"
+        if re.match(r"(une?\s+)?(semaine|week)\b", text):
+            return 7
+        if re.match(r"(une?\s+)?(mois|month)\b", text):
+            return 30
+
+        return None
+
+    @staticmethod
+    def _estimate_flight_minutes(distance_km: float) -> int:
+        """Estimate one-way flight duration in minutes from distance.
+
+        Uses 800 km/h cruise speed + 45 min overhead (takeoff/landing).
+        """
+        return max(60, int(distance_km / 800 * 60 + 45))
+
+    @staticmethod
+    def _max_flight_hours(trip_days: int) -> float:
+        """Maximum acceptable one-way flight hours for a given trip duration.
+
+        Rule: don't spend more than ~25% of the trip in total transit.
+        """
+        if trip_days <= 2:
+            return 2.5
+        if trip_days <= 3:
+            return 3.5
+        if trip_days <= 5:
+            return 5.0
+        if trip_days <= 7:
+            return 7.0
+        if trip_days <= 10:
+            return 10.0
+        if trip_days <= 14:
+            return 12.0
+        return 999  # No limit for 30+ day trips
+
+    @staticmethod
+    def _calculate_flight_price_score(
+        price: int,
+        budget_level: BudgetLevel,
+        all_prices: list[int],
+    ) -> float:
+        """Score a flight price relative to other candidates (percentile).
+
+        Budget/Comfort: aggressive curve penalizing expensive flights.
+        Premium/Luxury: gentle curve, price matters less.
+        """
+        if not all_prices or len(all_prices) < 2:
+            return 70.0
+
+        min_p = min(all_prices)
+        max_p = max(all_prices)
+        if max_p == min_p:
+            return 80.0
+
+        normalized = (price - min_p) / (max_p - min_p)
+
+        if budget_level in (BudgetLevel.BUDGET, BudgetLevel.COMFORT):
+            return max(0, 100 - normalized ** 0.7 * 100)
+        else:
+            return max(0, 100 - normalized ** 1.3 * 60)
+
     def _get_dynamic_weights(self, prefs: UserPreferencesPayload) -> dict[str, int]:
         """Adjust dimension weights based on user's top priority axis."""
         weights = dict(self.WEIGHTS)
@@ -640,16 +782,18 @@ class DestinationSuggestionService:
         eco = prefs.styleAxes.ecoVsLuxury
         nature = prefs.styleAxes.cityVsNature
 
-        # ecoVsLuxury #1 + extreme value → boost budget & distance
+        # ecoVsLuxury #1 + extreme value → boost price-related dimensions
         if top_axis == "ecoVsLuxury" and (eco < 30 or eco > 70):
-            weights["budget"] += 5      # 10 → 15
-            weights["distance"] += 3    # 15 → 18
-            weights["trending"] -= 3    # 3 → 0
-            weights["context"] -= 5     # 5 → 0
+            weights["flight_price"] += 3  # 8 → 11
+            weights["budget"] += 4        # 8 → 12
+            weights["distance"] += 2      # 10 → 12
+            weights["trending"] -= 3      # 3 → 0
+            weights["context"] -= 3       # 5 → 2
+            weights["style"] -= 3         # 17 → 14
 
         # cityVsNature #1 + extreme value → boost climate
         elif top_axis == "cityVsNature" and (nature < 30 or nature > 70):
-            weights["climate"] += 5     # 15 → 20
+            weights["climate"] += 5     # 12 → 17
             weights["trending"] -= 3    # 3 → 0
             weights["context"] -= 2     # 5 → 3
 
@@ -746,6 +890,7 @@ class DestinationSuggestionService:
             "month": current_month,
             "time_bucket": time_bucket,
             "city": preferences.userLocation.city,  # Include city for airport-specific results
+            "trip_duration": preferences.tripDuration,
         }
 
         serialized = json.dumps(key_data, sort_keys=True)
